@@ -1,0 +1,9 @@
+* text=auto
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.png binary
+*.ico binary
+*.exe binary
+*.jpg binary
+*.webp binary
+third_party/aria2/* -text
