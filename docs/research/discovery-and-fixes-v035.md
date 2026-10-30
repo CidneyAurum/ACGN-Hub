@@ -1,6 +1,6 @@
 # 0.3.5：真实书籍发现、统一品牌及流程修复
 
-状态：本地发布文件已生成，2026-10-31。冻结源码全量测试、最终构建和扫描已完成，最终程序已正常显示真实书籍页；真实35分钟自动刷新观察仍在进行，最终重启、快捷方式、汇总与GitHub推送尚待。本文按二进制身份分别记录候选和最终文件，不把旧版本或前一候选的全部验收移作最终文件通过证明。
+状态：本地验收完成，初始源码已推私有main，2026-10-31。冻结源码全量测试、最终构建/扫描、真实35分钟自动刷新、正式便携程序重启/正常退出、桌面入口、数据保留与草稿7附件下载回验均已通过。剩余为事实文档最终commit/push/tag、正式Release、远端复验及发布后汇总；不提前填写整个发布完成。本文按二进制身份分开记录候选和最终文件。
 
 ## 用户可见变化
 
@@ -67,7 +67,7 @@
 | 品牌图标 | `.work/brand-icons/verification.json` 核查ICO帧和透明角，接触表为同目录 `contact-sheet.png`；源图改变后需重新取hash |
 | 本地生成存储/取消P1、精确RSS选择 | 均已纳入最终390项unit及52项完整E2E；旧快照与重复cleanup不能取得新成品权限，旧记录打开须有当前归属 |
 
-以下为实际全量回执与当前尚未完成的原生观察。52项E2E是单次完整套件，不是专项数量相加：
+以下为实际全量回执、已完成的原生长观察及剩余发布项目。52项E2E是单次完整套件，不是专项数量相加：
 
 | 最终项目 | 当前结果与证据 |
 | --- | --- |
@@ -79,23 +79,26 @@
 | 生产前端与Tauri/NSIS构建 | 已完成；最终exe25,170,944字节，SHA256 `7F00CED820F1758FA35DC09858805E9AAC32EB9017FF24CD84DF40087809E7A1`；NSIS7,094,473字节，SHA256 `7494F6EE693AEBAD55D174DEE2339A426C0B87CB8CC4D11EEEF7809BA7E7FA1C` |
 | 最终静态扫描 | `.work/security-audit/v035-release-final-scan.json`两项退出0，防护和实时保护开启、无新增检测、产物保留且hash一致；NSIS未实际安装 |
 | 最终正常UIAutomation | session `normal-discovery-v035-final`，PID32412，原032Data，最终7F00…；真实文学少女热门24部/8.5分与漫画21部，见该目录 `launch.json`、`light-novel-loaded-final.png`。仅UIA，无CDP/注入 |
-| 真实35分钟自动刷新 | **正在运行，未写通过。**该session的 `active-refresh-observation.json` 指向唯一证据目录；T0页脚01:48:20，首样本2026-10-30T17:49:00Z valid=true，之后30秒被动采样，不手动刷新；最终结果待实际结束 |
-| 初次候选数据保留 | `.work/v03-evidence/normal-discovery-v035/data-preservation.json`：10来源、2下载、1作品、2资源、1外部ID、0本地索引保持，DB integrity=ok，两部成品和旧10个exe保持；不代替最终观察后重启验证 |
-| 本地发布目录 | `release/v0.3.5`已生成程序、安装包、启动说明及notice5小文本，并纳入VERSION/校验和；便携ZIP已生成校验，尚未上传 |
+| 真实35分钟自动刷新 | **passed=true**；elapsed2101.92865秒，71样本全部valid，UTC17:48:58.344→18:24:02.916。同PID32412/漫画/热门推荐保持，页脚01:48:20→02:18:39自动前进1819秒，无失败/手动刷新/helper干预，keepAwakeReleased=true。唯一汇总为final/refresh-observation-20261030T174858324Z-1dfb4e2b/summary.json，结束截图passive-timer-final.png及status无新增检测 |
+| 最终重启后数据保留 | `.work/v03-evidence/normal-discovery-v035/data-preservation.json` 于18:26:39Z再次只读核对：10来源、2下载、1作品、2资源、1外部ID、0本地索引共6表原样，DB integrity=ok，两部成品hash和旧10个exe保持 |
+| 本地发布目录 | `release/v0.3.5`已生成程序、安装包、启动说明及notice5小文本，并纳入VERSION/校验和；便携ZIP已生成校验，交付附件已上传草稿 |
 | 便携ZIP核验 | `ACGN-Hub-0.3.5-windows-x64.zip`：9,389,201字节，SHA256 `EEE43144C524E075F543326753412E87F9295110699A2069A41411384CA32EC4`；10条目CRC及全部内部文件hash核对通过，不含用户Data。证据 `.work/v03-evidence/normal-discovery-v035-final/delivery-assets.json` |
-| 最终重启/快捷方式/汇总 | 待相同Data正常重启、实际桌面目标及最终 `verification-final.json`，不能预填allChecksPassed=true。升级继续指向 `release/v0.3.2/Data` |
-| GitHub | 私有仓库已创建，尚未push；main远端commit、标签/Release、附件hash及上传核验待实际填写 |
+| 正式便携程序重启 | final/restart-verification.json passed=true；session normal-discovery-v035-restart、PID54160，正式release035exe同7F哈希、原032Data。两完成记录/文件名/打开按钮保留，小说/漫画精选排序及首屏真实封面正常；退出0、防护开、关闭前后无新增检测、无CDP/注入，未做成品播放测试 |
+| 桌面入口 | final/shortcut-verification.json passed=true；桌面ACGN Hub.lnk已更新START-ACGN-0.3.5.cmd+035exe图标，仍用032Data，旧lnk已备份 |
+| 最终发布汇总 | 待最后文档commit/push/tag、草稿正式发布与远端复验后组合 `verification-final.json`，未预填整个发布allChecksPassed=true |
+| GitHub源码 | 初始311文件提交 `b18c4e904f2e1963792d07b7ec1c668974b3fa8e` 已推main，ls-remote一致，private=true；事实文档最终更新尚待最后提交 |
+| Release草稿 | v0.3.5草稿7资产已实际下载，大小/hash全部一致；final/github-draft-verification.json passed=true，下载ZIP的CRC/内容白名单通过，不含Data/媒体。尚未正式发布，最终发布状态待实际填写 |
 
 ## 二进制身份与长观察边界
 
 深审前候选未运行、未发布。完成P1修复后的84F8458C91383D64B416EA970FF8C75F566CD6323ACF3FFF79E1950A81B07047候选仅用于原生验证，未发布；证据在 `.work/v03-evidence/normal-discovery-v035`。它实际完成漫画21→45分页、付丧堂古董店7高分9.1/详情、来源建议及类别query保留、下载两记录展示。MKV的系统打开命令记录success=true，并观察到OpenWith窗口；这不证明视频已播放或解码成功。
 
-随后仅澄清KUN文案，重新构建扫描为最终7F00…文件，再以PID32412在 `normal-discovery-v035-final` 记录真实页面和身份。上一候选的具体操作不可改贴为最终程序的操作；两次都没有重下用户媒体。
+随后仅澄清KUN文案，重新构建扫描为最终7F00…文件，以PID32412在 `normal-discovery-v035-final` 记录真实页面及35分钟被动刷新，正常退出0。正式release目录同hash程序又以PID54160/原Data重启，真实检查两条成品记录/打开入口及小说漫画首屏封面后正常退出0；final/restart-verification.json记录本次实际检查。上一候选的具体操作不可改贴为最终程序的操作，各次都没有重下用户媒体。
 
-真实35分钟观察初始有两次纯PowerShell5工具预检失败：重定向子进程ExitCode需保留进程句柄，ConvertFrom-Json数组需赋值后再枚举。修正观察工具后才开始被动采样，这两次预检不计作35分钟运行，不把首个valid样本或48轮浏览器场景算成原生长观察通过。
+真实35分钟观察初始有两次纯PowerShell5工具预检失败：重定向子进程ExitCode需保留进程句柄，ConvertFrom-Json数组需赋值后再枚举。修正工具后才开始被动采样，最终由唯一summary确认71个有效样本、请求时长完成与页脚自动前进。这两次预检不计作35分钟运行，也未使用首个valid样本或48轮浏览器场景代替原生长观察。
 
 ## 发布清单原则
 
 `package-verified-release.ps1` 保留原有扫描身份、无覆盖检查和复制后hash核验，guide仍通过ASCII脚本中的UTF8 Base64生成。本轮补充书籍发现、品牌源路径/哈希、来源用途、成品打开和存储失败策略字段，并将第三方归属小文本纳入支持文件清单和校验。旧命名/BT信息保留为既有能力，不把历史验收当本轮物理操作。
 
-便携产物包含程序、安装包、启动说明、校验信息和第三方归属文本，不包含用户Data、媒体、账号或Cookie。[THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)与aria2官方COPYING、AUTHORS、README.mingw、LICENSE.OpenSSL共5个小文本已计入本地发布清单。`START-PORTABLE.cmd`使用版本目录自己的Data；既有本机桌面升级入口单独指向原 `release/v0.3.2/Data`，快捷方式的最终更新仍待核对。图标源路径属于仓库说明，不表示发布目录附带SVG源或完整证据目录。所有旧release目录保持原样。
+便携产物包含程序、安装包、启动说明、校验信息和第三方归属文本，不包含用户Data、媒体、账号或Cookie。[THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md)与aria2官方COPYING、AUTHORS、README.mingw、LICENSE.OpenSSL共5个小文本已计入本地发布清单。`START-PORTABLE.cmd`使用版本目录自己的Data；本机桌面升级入口已核对为START-ACGN-0.3.5.cmd及035exe图标，单独指向原 `release/v0.3.2/Data`，旧lnk有备份。图标源路径属于仓库说明，不表示发布目录附带SVG源或完整证据目录。所有旧release目录保持原样。

@@ -1,4 +1,4 @@
-# ACGN Hub 0.3.5 · 本地产物就绪，持续观察中
+# ACGN Hub 0.3.5 · 本地验收完成，正式发布准备中
 
 漫画、轻小说发现页已补成真实推荐书架：精选作品、大幅封面、简介、评分和可收藏的封面墙，与动画页保持一致。作品资料来自 [Bangumi 官方公开 API](https://github.com/bangumi/api/blob/master/open-api/v0.yaml)，支持热门、高分及近一年热门、分页和独立刷新。没有 AI 人物或虚构作品、评分。
 
@@ -8,11 +8,13 @@
 
 来源入口已按用途统一：中文漫画优先 MangaBZ、拷贝，中文轻小说 TXT 优先 LNovel；MangaDex、公开投稿及 Internet Archive 标为具体用途的备用，Galgame 分享页显示为索引。优先级不是站点可用率承诺，不自动改变原有地址、Token和启用状态。实际目录、图像及正文边界见[书籍源实审](docs/research/source-audit-v035-books.md)。WeebCentral和快看保持撤下。
 
-0.3.5已完成51文件/390项Vitest、74项Rust（2项默认忽略）及完整52项浏览器E2E，含48轮混合导航压力场景。最终exe与NSIS已构建并通过本轮静态扫描，防护保持开启、扫描窗口无新增检测；NSIS未实际安装。[本地产物](release/v0.3.5/使用说明.md)已包含第三方notice与校验清单，[Windows便携ZIP](release/v0.3.5/ACGN-Hub-0.3.5-windows-x64.zip)已生成，9,389,201字节、CRC与内部文件hash核对通过，不含用户Data；尚未上传。
+0.3.5已完成51文件/390项Vitest、74项Rust（2项默认忽略）及完整52项浏览器E2E，含48轮混合导航压力场景。最终exe与NSIS已构建并通过本轮静态扫描，防护保持开启、扫描窗口无新增检测；NSIS未实际安装。Windows便携ZIP已生成，9,389,201字节、CRC与内部文件hash核对通过，不含用户Data。[0.3.5发布页（草稿，尚未正式发布）](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.5)的7个附件已实际下载回验，大小和SHA256全部匹配。
 
-最终7F00…构建的正常桌面已显示真实《文学少女》热门页24部及8.5分、漫画21部，正在进行真实35分钟被动自动刷新观察。**观察尚未完成，不能记为通过**；重启、桌面快捷方式和发布汇总也仍待最后填写。此前84F8…同功能候选的分页/详情/来源验证独立记录，不能混作最终文件的全部操作。[0.3.5完整范围及当前证据](docs/research/discovery-and-fixes-v035.md)与[验证记录](VERIFICATION.md)保留身份和边界。升级继续使用原 `release/v0.3.2/Data`；便携目录自己的 `START-PORTABLE.cmd` 使用独立Data，不打包用户媒体与账号。
+最终7F00…构建已通过真实35分钟被动自动刷新观察：71次采样全部有效，漫画/热门分类及进程保持，页脚从01:48:20自动更新至02:18:39，无手动刷新或失败。正式便携程序使用原Data重启后，两条已完成任务、两个文件名及打开入口保留，《文学少女》《链锯人》精选与封面墙正常，首屏真实封面已加载；正常退出0，防护开启且无新增检测。桌面入口和图标已更新至0.3.5，旧快捷方式已备份；六张数据表、两部成品hash和10个旧exe均保持。最终发布汇总、最后文档提交与正式Release尚待完成。[0.3.5完整证据](docs/research/discovery-and-fixes-v035.md)与[验证记录](VERIFICATION.md)区分此前84F8…候选及最终文件，打开入口不等于已播放验证。升级继续使用原 `release/v0.3.2/Data`；便携目录自己的 `START-PORTABLE.cmd` 使用独立Data，不打包用户媒体与账号。
 
-私有源码仓库：[CidneyAurum/ACGN-Hub](https://github.com/CidneyAurum/ACGN-Hub)。仓库已创建，源码、标签和Release附件尚未推送。组件归属及原始许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+私有源码仓库：[CidneyAurum/ACGN-Hub](https://github.com/CidneyAurum/ACGN-Hub)。初始311个文件已提交为 `b18c4e9` 并推送main，远端提交核对一致；Release目前仍为草稿。组件归属及原始许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+文档里的 `.work`、旧 `release` 和 `Library` 路径是本机历史证据或媒体位置，不随源码上传；GitHub查看这些本地链接不会得到对应文件。当前版本附件以以上发布页为准，草稿完成正式发布后可从该页取得。
 
 ## 0.3.4及更早版本的历史交付
 

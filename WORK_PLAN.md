@@ -1,6 +1,6 @@
 # ACGN Hub 0.3.5 工作计划与当前状态
 
-## 0.3.5 当前工作：本地产物已就绪，持续观察与最后发布核验
+## 0.3.5 当前工作：本地验收完成，最后提交与正式发布准备中
 
 已实现漫画/轻小说真实Bangumi推荐、精选与封面墙，热门/高分/近一年热门排序、24个上游位置分页、分类隔离30分钟缓存及原时间离线回退；窗口焦点、可见性、网络恢复及跨日会按需刷新。书籍分类遵循Bangumi明确platform和可信标签，过滤R18、无封面项及一般文学的一票轻小说误标。动画继续自动跟随本地季度，不以长期连载放送表代替季度目录。
 
@@ -16,11 +16,12 @@
 | 全量Rust/E2E与生产构建 | Rust74通过、2忽略，直接调用退出0；完整52项E2E通过，含48轮固定响应混合压力场景；前端与最终Tauri/NSIS已构建 |
 | 最终exe/NSIS、扫描和文件哈希 | exe25,170,944字节，SHA7F00CED8…87809E7A1；NSIS7,094,473字节，SHA7494F6EE…7E7FA1C；新v035-release-final-scan两项退出0、防护开启、无新增事件，未安装NSIS |
 | 正常桌面 | 最终7F00…/PID32412在原032Data真实显示文学少女热门24部/8.5、漫画21部。旧84F8…候选的21→45分页、付丧堂7高分/详情、来源及MKV打开命令另记，不能混身份 |
-| 真实自动刷新长观察 | 正在执行35分钟被动观察，最终session normal-discovery-v035-final；尚未完成，未记通过。T0页脚01:48:20，首样本17:49:00Z有效；不手动刷新 |
-| 数据、重启与升级入口 | 初次候选UI后10来源/2任务/2资源及已有MP4/MKV哈希保留，DB完整性ok、旧10个exe保持；最终7F重启、桌面快捷方式与最终汇总仍待 |
-| 本地发布与GitHub | release/v0.3.5程序、安装包、notice等清单/校验已生成；Windows便携ZIP9,389,201字节，10条目CRC及逐项hash核对通过，SHAEEE43144…4CA32EC4，见final目录delivery-assets.json；尚未上传，私有仓库尚未push |
+| 真实自动刷新长观察 | 已通过，elapsed2101.92865秒、71样本全部有效；同一PID32412/漫画/热门推荐保持，页脚01:48:20→02:18:39自动前进1819秒，无失败或helper干预，keepAwake已释放。唯一summary位于final/refresh-observation-20261030T174858324Z-1dfb4e2b |
+| 数据、重启与升级入口 | 正式release同7F哈希/原032Data重启PID54160已通过UIA；两条完成记录、两文件名/打开按钮、小说漫画首屏封面正常，退出0且防护开启无检测。重启后6表/2媒体hash/10旧exe保持；桌面已指向START-ACGN-0.3.5.cmd和035exe图标、旧lnk有备份 |
+| 本地产物 | release/v0.3.5程序、安装包、notice等清单/校验已生成；Windows便携ZIP9,389,201字节，10条目CRC及逐项hash核对通过，SHAEEE43144…4CA32EC4，见final目录delivery-assets.json |
+| 私有源码与Release草稿 | 初始311文件以b18c4e904f2e1963792d07b7ec1c668974b3fa8e提交并推送main，ls-remote一致，仓库private=true；v0.3.5草稿7资产实际下载全部大小/hash匹配，github-draft-verification.json passed=true；尚未正式发布 |
 
-详细已知结果、剩余观察项目及构建身份见[discovery-and-fixes-v035.md](docs/research/discovery-and-fixes-v035.md)。35分钟观察、最终重启和远端推送必须等实际回执再补，不预写通过。以下0.3.4及更早部分保留为历史记录。
+详细本地验收、35分钟观察及构建身份见[discovery-and-fixes-v035.md](docs/research/discovery-and-fixes-v035.md)。剩余为事实文档最终commit/push/tag、Release草稿正式发布及远端复验，之后再生成最终verification-final.json；不提前填写整个发布完成。以下0.3.4及更早部分保留为历史记录。
 
 ## 0.3.4 历史交付：下载完成后自动命名
 
