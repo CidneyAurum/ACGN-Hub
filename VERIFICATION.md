@@ -1,8 +1,8 @@
 # ACGN Hub 0.3 验证记录
 
-## 最新增量：0.3.5 真实书籍发现与流程修复（本地验收完成，正式发布准备中）
+## 最新增量：0.3.5 真实书籍发现与流程修复（验收与正式发布完成）
 
-当前已完成最终源码全量回归、构建、扫描、本地清单、真实35分钟自动刷新、正式便携程序重启/正常退出、桌面入口及7个草稿附件的实际下载回验。最后文档commit/push/tag、草稿正式发布、远端复验与发布后汇总仍待。不同候选的正常桌面证据分开标明；[本轮完整说明](docs/research/discovery-and-fixes-v035.md)保存接口依据、完整身份及剩余项目。
+已完成最终源码全量回归、构建、扫描、本地清单、真实35分钟漫画热门自动刷新、正式便携程序重启/正常退出、桌面入口、7附件实际下载回验及正式发布远端核验。最终汇总已实际生成并通过。不同候选的正常桌面证据分开标明；[本轮完整说明](docs/research/discovery-and-fixes-v035.md)保存接口依据、完整身份及验证范围。
 
 | 项目 | 当前范围/待填结果 |
 | --- | --- |
@@ -19,12 +19,12 @@
 | 前一候选桌面边界 | 84F8458C…候选的漫画21→45分页、付丧堂7高分9.1/详情/来源建议、精确类别参数、2条下载记录及MKV打开命令成功记录于 `.work/v03-evidence/normal-discovery-v035`。观察到OpenWith，不能称已播放；这些操作不混作最终7F00…的全部验收 |
 | 真实35分钟自动刷新 | **passed=true**，elapsed2101.92865秒，71样本全部valid；UTC17:48:58.344→18:24:02.916，同PID32412/漫画/热门保持，页脚01:48:20→02:18:39自动前进1819秒，无失败或helper干预，keepAwakeReleased=true。[唯一观察汇总](.work/v03-evidence/normal-discovery-v035-final/refresh-observation-20261030T174858324Z-1dfb4e2b/summary.json)、[结束截图](.work/v03-evidence/normal-discovery-v035-final/passive-timer-final.png)；该次status无新增检测 |
 | 数据保留与本地清单 | 最终正式程序重启后再次只读核对：10来源/2任务/1作品/2资源/1外部ID/0本地索引共6表原样、DB完整性ok，MP4/MKV内容hash及旧10个exe保持；[18:26:39Z回执](.work/v03-evidence/normal-discovery-v035/data-preservation.json)。release/v0.3.5已带notice5小文本并列清单/校验 |
-| 便携ZIP | 已生成 `ACGN-Hub-0.3.5-windows-x64.zip`，9,389,201字节，SHA256 `EEE43144C524E075F543326753412E87F9295110699A2069A41411384CA32EC4`；10条目CRC通过、全部内部文件hash匹配、不含用户Data，[交付资产核验](.work/v03-evidence/normal-discovery-v035-final/delivery-assets.json)，已上传至草稿 |
-| 私有源码推送 | 初始311文件提交 `b18c4e904f2e1963792d07b7ec1c668974b3fa8e` 已推main，ls-remote与本地一致；仓库private=true。后续事实文档最终提交尚待 |
-| Release草稿附件 | 7资产已实际下载，大小/SHA256全部匹配，下载ZIP的10条目CRC与内容白名单通过，无Data/媒体；[远端下载回验](.work/v03-evidence/normal-discovery-v035-final/github-draft-verification.json) passed=true。草稿尚未正式发布 |
+| 便携ZIP | 已生成 `ACGN-Hub-0.3.5-windows-x64.zip`，9,389,201字节，SHA256 `EEE43144C524E075F543326753412E87F9295110699A2069A41411384CA32EC4`；10条目CRC通过、全部内部文件hash匹配、不含用户Data，[交付资产核验](.work/v03-evidence/normal-discovery-v035-final/delivery-assets.json)，已在正式Release发布 |
+| 私有源码与标签 | 验证文档提交 `c989cb23fc227a98cfa844338a1b23a6984b2d57` 已推main；annotated tag v0.3.5 peeled同一提交，发布核验时main/tag一致，仓库private=true。标签固定，后续main文档回执不改生产代码 |
+| 正式Release附件 | 7资产已实际下载，大小/SHA256全部匹配，下载ZIP的10条目CRC与内容白名单通过，无Data/媒体；[下载回验](.work/v03-evidence/normal-discovery-v035-final/github-draft-verification.json)及[正式发布核验](.work/v03-evidence/normal-discovery-v035-final/github-published-verification.json)均passed=true。isDraft=false，非prerelease，正式时间18:30:35Z |
 | 正式便携程序重启 | [restart-verification.json](.work/v03-evidence/normal-discovery-v035-final/restart-verification.json) passed=true：release/v0.3.5/ACGN-Hub-0.3.5.exe同7F00…、原032Data、PID54160；UIA实际两完成记录/文件名/打开按钮，文学少女与链锯人精选/排序/封面墙正常、首屏封面已目视加载；正常退出0，关闭前后无新增检测、防护开、无CDP/注入。未做成品播放测试 |
 | 桌面快捷方式 | [shortcut-verification.json](.work/v03-evidence/normal-discovery-v035-final/shortcut-verification.json) passed=true：桌面ACGN Hub.lnk指向START-ACGN-0.3.5.cmd，图标取035exe；原032Data不变、旧lnk已备份 |
-| 正式发布与最终汇总 | 最后文档commit/push/tag、草稿正式发布及远端复验仍待；发布后组合verification-final.json，未提前写整个发布allChecksPassed或发布完成 |
+| 正式发布与最终汇总 | [v0.3.5正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.5)已完成；[verification-final.json](.work/v03-evidence/normal-discovery-v035-final/verification-final.json)于18:30:48Z实际生成，allChecksPassed=true，完整聚合工程/扫描/长观察/重启/桌面/数据/ZIP/GitHub，不改变各项原验证边界 |
 
 书籍源5项实际审计已完成，见[审计报告](docs/research/source-audit-v035-books.md)：中文漫画两个来源实际页图及繁中对白、LNovel正文、IA准确版本公开TXT均有证据；MangaDex原作《葬送的芙莉莲》当前feed为空，独立同人的成功图片没有记为原作成功。旧版本的整章下载、改名和BT证据保持原日期与文件身份。
 

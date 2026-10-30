@@ -1,6 +1,6 @@
 # 0.3.5：真实书籍发现、统一品牌及流程修复
 
-状态：本地验收完成，初始源码已推私有main，2026-10-31。冻结源码全量测试、最终构建/扫描、真实35分钟自动刷新、正式便携程序重启/正常退出、桌面入口、数据保留与草稿7附件下载回验均已通过。剩余为事实文档最终commit/push/tag、正式Release、远端复验及发布后汇总；不提前填写整个发布完成。本文按二进制身份分开记录候选和最终文件。
+状态：验收与正式发布完成，2026-10-31。[v0.3.5正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.5)对应私有仓库annotated tag，固定提交c989cb23fc227a98cfa844338a1b23a6984b2d57。冻结源码全量测试、最终构建/扫描、真实35分钟漫画热门自动刷新、正式便携程序重启/正常退出、桌面入口、数据保留、7附件实际下载回验及正式远端核验均通过，verification-final.json已实际生成allChecksPassed=true。本文按二进制身份分开记录候选和最终文件；后续main仅补充文档回执，不改生产代码。
 
 ## 用户可见变化
 
@@ -81,13 +81,13 @@
 | 最终正常UIAutomation | session `normal-discovery-v035-final`，PID32412，原032Data，最终7F00…；真实文学少女热门24部/8.5分与漫画21部，见该目录 `launch.json`、`light-novel-loaded-final.png`。仅UIA，无CDP/注入 |
 | 真实35分钟自动刷新 | **passed=true**；elapsed2101.92865秒，71样本全部valid，UTC17:48:58.344→18:24:02.916。同PID32412/漫画/热门推荐保持，页脚01:48:20→02:18:39自动前进1819秒，无失败/手动刷新/helper干预，keepAwakeReleased=true。唯一汇总为final/refresh-observation-20261030T174858324Z-1dfb4e2b/summary.json，结束截图passive-timer-final.png及status无新增检测 |
 | 最终重启后数据保留 | `.work/v03-evidence/normal-discovery-v035/data-preservation.json` 于18:26:39Z再次只读核对：10来源、2下载、1作品、2资源、1外部ID、0本地索引共6表原样，DB integrity=ok，两部成品hash和旧10个exe保持 |
-| 本地发布目录 | `release/v0.3.5`已生成程序、安装包、启动说明及notice5小文本，并纳入VERSION/校验和；便携ZIP已生成校验，交付附件已上传草稿 |
+| 本地发布目录 | `release/v0.3.5`已生成程序、安装包、启动说明及notice5小文本，并纳入VERSION/校验和；便携ZIP已生成校验，7个交付附件已正式发布 |
 | 便携ZIP核验 | `ACGN-Hub-0.3.5-windows-x64.zip`：9,389,201字节，SHA256 `EEE43144C524E075F543326753412E87F9295110699A2069A41411384CA32EC4`；10条目CRC及全部内部文件hash核对通过，不含用户Data。证据 `.work/v03-evidence/normal-discovery-v035-final/delivery-assets.json` |
 | 正式便携程序重启 | final/restart-verification.json passed=true；session normal-discovery-v035-restart、PID54160，正式release035exe同7F哈希、原032Data。两完成记录/文件名/打开按钮保留，小说/漫画精选排序及首屏真实封面正常；退出0、防护开、关闭前后无新增检测、无CDP/注入，未做成品播放测试 |
 | 桌面入口 | final/shortcut-verification.json passed=true；桌面ACGN Hub.lnk已更新START-ACGN-0.3.5.cmd+035exe图标，仍用032Data，旧lnk已备份 |
-| 最终发布汇总 | 待最后文档commit/push/tag、草稿正式发布与远端复验后组合 `verification-final.json`，未预填整个发布allChecksPassed=true |
-| GitHub源码 | 初始311文件提交 `b18c4e904f2e1963792d07b7ec1c668974b3fa8e` 已推main，ls-remote一致，private=true；事实文档最终更新尚待最后提交 |
-| Release草稿 | v0.3.5草稿7资产已实际下载，大小/hash全部一致；final/github-draft-verification.json passed=true，下载ZIP的CRC/内容白名单通过，不含Data/媒体。尚未正式发布，最终发布状态待实际填写 |
+| 最终发布汇总 | final/verification-final.json于18:30:48Z实际生成allChecksPassed=true，完整聚合tests/scans/35min/restart/shortcut/数据/ZIP/GitHub；并非预填完成 |
+| GitHub源码 | 验证文档提交 `c989cb23fc227a98cfa844338a1b23a6984b2d57` 已推main，annotated tag v0.3.5 peeled同提交，发布核验时main/tag一致；private=true。初始生产源码快照为b18c4e9，后续只改文档；之后main文档回执不改本版生产代码 |
+| 正式Release | 18:30:35Z正式发布，isDraft=false、非prerelease；7资产远端digest/大小与本地及实际下载SHA一致，final/github-published-verification.json passed=true。先前实际下载回验final/github-draft-verification.json亦保留，下载ZIP的CRC/内容白名单通过，无Data/媒体 |
 
 ## 二进制身份与长观察边界
 

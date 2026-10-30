@@ -1,6 +1,6 @@
 # ACGN Hub 0.3.5 工作计划与当前状态
 
-## 0.3.5 当前工作：本地验收完成，最后提交与正式发布准备中
+## 0.3.5 当前交付：验收与正式发布完成
 
 已实现漫画/轻小说真实Bangumi推荐、精选与封面墙，热门/高分/近一年热门排序、24个上游位置分页、分类隔离30分钟缓存及原时间离线回退；窗口焦点、可见性、网络恢复及跨日会按需刷新。书籍分类遵循Bangumi明确platform和可信标签，过滤R18、无封面项及一般文学的一票轻小说误标。动画继续自动跟随本地季度，不以长期连载放送表代替季度目录。
 
@@ -19,9 +19,10 @@
 | 真实自动刷新长观察 | 已通过，elapsed2101.92865秒、71样本全部有效；同一PID32412/漫画/热门推荐保持，页脚01:48:20→02:18:39自动前进1819秒，无失败或helper干预，keepAwake已释放。唯一summary位于final/refresh-observation-20261030T174858324Z-1dfb4e2b |
 | 数据、重启与升级入口 | 正式release同7F哈希/原032Data重启PID54160已通过UIA；两条完成记录、两文件名/打开按钮、小说漫画首屏封面正常，退出0且防护开启无检测。重启后6表/2媒体hash/10旧exe保持；桌面已指向START-ACGN-0.3.5.cmd和035exe图标、旧lnk有备份 |
 | 本地产物 | release/v0.3.5程序、安装包、notice等清单/校验已生成；Windows便携ZIP9,389,201字节，10条目CRC及逐项hash核对通过，SHAEEE43144…4CA32EC4，见final目录delivery-assets.json |
-| 私有源码与Release草稿 | 初始311文件以b18c4e904f2e1963792d07b7ec1c668974b3fa8e提交并推送main，ls-remote一致，仓库private=true；v0.3.5草稿7资产实际下载全部大小/hash匹配，github-draft-verification.json passed=true；尚未正式发布 |
+| 私有源码与正式Release | 验证文档提交c989cb23fc227a98cfa844338a1b23a6984b2d57已推main，annotated tag v0.3.5 peeled同一提交；仓库private=true。正式Release非草稿/非预发布，7附件实际下载hash及正式远端digest/大小一致，github-published-verification.json passed=true |
+| 最终汇总 | normal-discovery-v035-final/verification-final.json已实际生成，allChecksPassed=true，聚合工程、扫描、35分钟漫画热门观察、重启、桌面、数据、ZIP及GitHub核验 |
 
-详细本地验收、35分钟观察及构建身份见[discovery-and-fixes-v035.md](docs/research/discovery-and-fixes-v035.md)。剩余为事实文档最终commit/push/tag、Release草稿正式发布及远端复验，之后再生成最终verification-final.json；不提前填写整个发布完成。以下0.3.4及更早部分保留为历史记录。
+详细验收、35分钟漫画热门观察及构建身份见[discovery-and-fixes-v035.md](docs/research/discovery-and-fixes-v035.md)。v0.3.5标签固定c989cb23…；随后main仅补充发布文档回执，不改变本版生产代码，不预填该后续提交的SHA。NSIS未实际安装，MKV未在关联播放器中实际播放。以下0.3.4及更早部分保留为历史记录。
 
 ## 0.3.4 历史交付：下载完成后自动命名
 
