@@ -15,7 +15,8 @@
 | 最终漫画及重启 | 同一正式程序实际连续滚动、全屏鼠标翻到第2页、返回恢复第2页；PID5620正常退出0后，以正式release同哈希/原032Data重启PID62636，仍恢复第2页。状态检查无新增检测；用户随后关闭GUI，不重开 |
 | 最终构建及扫描 | 最终exe25,553,408字节/SHA95D19A…613403F4、NSIS7,223,620字节/SHAD0AFD2…1324A29已构建扫描打包；两项退出0、防护开启、无新增检测，NSIS未实际安装。此前6D1B…候选保留独立历史身份 |
 | 数据保留 | `.work/v036-evidence/data-preservation.json`为passed：10个来源ID保留，其中3条配置在用户并行使用期间修改，保留当前值不回滚；原2任务/3资源/1作品等原有记录保持，选版验证新增1作品。3个媒体文件内容hash及12个旧exe不变，DB完整性ok |
-| 交付入口与GitHub | 桌面快捷方式已指向START-ACGN-0.3.6.cmd与036exe图标，继续使用原032Data；程序、安装包及清单已打包。ZIP、附件回验与GitHub标签/Release仍待实际记录，不提前声明推送完成 |
+| 交付入口与本地产物 | 桌面快捷方式已指向START-ACGN-0.3.6.cmd与036exe图标，继续使用原032Data；程序、安装包及清单已打包。ZIP9,556,150字节/SHA8C1E8267…CEFDCD58，10条目CRC及每项hash通过、不含用户Data，见`.work/v036-evidence/delivery-assets.json` |
+| 私有源码与Release草稿 | 生产代码提交`cfa5f121c351189259f5ab16c86ba6eb5adcca76`已推main，已核查private；v0.3.6草稿7资产已实际下载回验，大小/SHA256/API digest全部一致，`.work/v036-evidence/github-draft-verification.json`为passed，下载ZIP白名单/10条目CRC/逐项hash/noData及VERSION/SHA9项/外层6项校验通过。正式标签/发布及最终JSON仍待回执，不将草稿写成正式发布 |
 
 [本轮实现与证据边界](docs/research/local-viewing-v036.md)单列已修失败、真实API检查及剩余验收。NSIS实际安装不在本轮便携验收范围；内置视频支持取决于系统/WebView解码，不把打开入口或浏览器模拟写为所有格式播放通过。
 

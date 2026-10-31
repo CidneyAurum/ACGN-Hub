@@ -56,7 +56,8 @@ Copy目录中的内部`index=67`是排序位置，不能解释为第67话。现�
 | 正常重启及进度 | PID5620正常退出0后，`.work/v03-evidence/normal-v036-restart/launch.json`记录同正式exe/原032Data重启PID62636；`restart-resume-page2.json`/`.png`仍显示第2页，status无新增检测。用户已关闭GUI，不再重开 |
 | 数据保留 | `.work/v036-evidence/data-preservation.json`为passed、DB完整性ok。10个来源ID保留，3条配置在用户并行使用期间修改，保留当前值不回滚；原2任务/3资源/1作品/1外部ID/0本地索引不变，选版核验新增1作品（现2）。3个媒体payload含CBZ的内容hash及12个旧exe保持 |
 | 桌面入口 | `.work/v036-evidence/shortcut-verification.json`为passed：桌面ACGN Hub.lnk指向START-ACGN-0.3.6.cmd，图标取正式036exe，继续使用原`release/v0.3.2/Data` |
-| 本地交付与发布准备 | 程序/安装包/清单已打包、本地验收完成；ZIP/附件回验和GitHub标签/Release仍待实际记录，尚未声明正式发布完成 |
+| 本地便携ZIP | `.work/v036-evidence/delivery-assets.json`：`ACGN-Hub-0.3.6-windows-x64.zip`为9,556,150字节，SHA256 `8C1E8267F5D27DF0D451F9C21FCFE7CEE1DCBBC3C1AE9E2881F2D90ECEFDCD58`；10条目CRC和每项hash通过，不含用户Data。VERSION补入最终原生证据路径，exe与安装包哈希保持 |
+| 私有源码与发布草稿回验 | 生产代码提交`cfa5f121c351189259f5ab16c86ba6eb5adcca76`已推main；`.work/v036-evidence/github-draft-verification.json`为passed、private=true、isDraft=true。7资产已实际下载，大小/SHA256/API digest全部匹配；下载ZIP10条目白名单/CRC/每项hash/noData、VERSION/SHA9项及外层6项校验通过。正式标签/发布及最终汇总JSON仍待回执，尚未声明正式发布完成 |
 
 此前6D1B候选程序、安装包和清单保存在`.work/v036-evidence/pre-unified-candidate`，原生失败另在`normal-viewer-v036*`历史目录；这些本机证据不随源码上传。最终哈希取本次扫描文件，尚未填写未取得的标签提交或`allChecksPassed`。TXT阅读器及自动接续主要通过固定响应测试验证，不将其写成正式桌面全卷下载或跨卷接续实测。
 

@@ -20,7 +20,9 @@
 | 漫画版本及第60话 | 同session的`manga-two-source-editions.json`和`manga-edition-chapter60.json`/`.png`实际查看不同来源版本、柚原もけ版75条目录及第60话22页信息；这是目录核验，没有重新下载全卷 |
 | 最终漫画与正常重启 | `final-fullscreen-mouse-next.json`/`.png`实际全屏鼠标翻到第2页，`comic-continuous-final.png`显示连续阅读，`resume-page2-final.json`记录返回恢复第2页。PID5620正常退出0后，`normal-v036-restart/launch.json`记录同正式exe/原Data重启PID62636，`restart-resume-page2.json`/`.png`仍显示第2页；status无新增检测。用户已关闭GUI，不重开 |
 | 数据与文件保留 | `.work/v036-evidence/data-preservation.json`为passed，DB完整性ok；10个来源ID保留，用户并行使用期间3条配置发生修改，保留当前值、不回滚也不称全表字节不变。原2任务/3资源/1作品/1外部ID/0本地索引保持，选版核验新增1作品（现2）；3个媒体payload（含CBZ）hash及12个旧exe不变 |
-| 快捷方式与发布准备 | `.work/v036-evidence/shortcut-verification.json`为passed：桌面入口指向START-ACGN-0.3.6.cmd与036exe图标，仍用原032Data。程序/安装包/清单已打包；ZIP/附件回验及GitHub标签/Release仍待实际记录，不提前填写最终汇总或宣称发布完成 |
+| 快捷方式 | `.work/v036-evidence/shortcut-verification.json`为passed：桌面入口指向START-ACGN-0.3.6.cmd与036exe图标，仍用原032Data；程序/安装包/清单已打包 |
+| 便携ZIP | `.work/v036-evidence/delivery-assets.json`：`ACGN-Hub-0.3.6-windows-x64.zip`为9,556,150字节，SHA256 `8C1E8267F5D27DF0D451F9C21FCFE7CEE1DCBBC3C1AE9E2881F2D90ECEFDCD58`；10条目CRC及逐项hash通过、不含用户Data。VERSION附最终原生证据路径，exe/NSIS哈希保持上表 |
+| 私有源码与Release草稿回验 | 生产代码提交`cfa5f121c351189259f5ab16c86ba6eb5adcca76`已推main；`.work/v036-evidence/github-draft-verification.json`实际passed、private=true、isDraft=true，7资产实际下载大小/SHA256/API digest全部一致。下载ZIP10条目白名单/CRC/每项hash/noData、VERSION/SHA9项及外层6项校验通过。正式标签/发布及最终汇总JSON仍待实际回执，未提前宣称发布完成 |
 
 旧用户文件不自动移动或重打包；阅读只读原始内容。漫画/小说接续只使用同作品同版、归属有效且已完成的文件；自动倒计时只在实际阅读到末尾且内容加载成功后触发。TXT阅读及自动接续主要通过固定响应场景验证，不称原生全卷下载与接续已实测。内置视频的模拟控件测试不证明本机所有编解码/字幕均可用，NSIS未实际安装。0.3.5及更早验收保持原日期、构建哈希和适用范围。
 
