@@ -1,5 +1,20 @@
 # ACGN Hub 0.3 验证记录
 
+## 最新增量：0.3.9 暖色电视图标
+
+| 检查 | 实际结果 |
+| --- | --- |
+| 图标生成 | 16／24／32／48／64／128／256 像素 ICO、透明角与不透明屏幕、SVG 副本一致；`.work/brand-icons-tv-v039/verification.json` |
+| 真实程序图标 | 从发布 exe 提取 32 像素图标，545 个全不透明像素与生成源的 RGB 最大差值为 0；`.work/v039-evidence/embedded-icon-verification.json` |
+| 类型检查／生产构建 | 通过，桌面打包完成 |
+| 浏览器定向流程 | 一个已有首页显示与详情流程通过；`.work/e2e/v039-brand-final/.last-run.json` |
+| 原生视觉验收 | 最终 exe 的窗口与侧栏显示暖色小电视；隔离资料、Windows UIAutomation、无调试注入、程序已关闭；`.work/v039-evidence/native-verification.json` |
+| 静态扫描 | exe `128C4E83FB46C35A77E90653BCAC8C0BD2C35137F9360F0792AEE58A0F1C16C9`，NSIS `851E05901FE48E97562E1170B236EC2D590D7EA3603BBC8F8A287D629A1120B0` 均通过；NSIS 未安装 |
+| 数据保留 | 原 9 表／3 媒体／18 个旧 exe 保持，DB 完整性 ok；`.work/v039-evidence/data-preservation.json` |
+| 桌面与便携包 | 桌面指向 START-ACGN-0.3.9.cmd 与新 exe 图标；ZIP 9,541,561 字节、10 条目 CRC 及逐项 hash 通过，不含用户资料 |
+
+本轮只修改品牌资产、资源缓存标识、版本与交付文件，没有将 0.3.8 的 604 单测／80 浏览器等历史记录计作本次重新执行。发布路径：[私有 GitHub 0.3.9](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.9)。
+
 ## 最新增量：0.3.8 Galgame 完整资源整合
 
 | 验证 | 结果与范围 |

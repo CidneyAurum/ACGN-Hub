@@ -2,7 +2,7 @@
 
 Requires the installed @tauri-apps/cli (SVG renderer), Node, and Pillow.
 Run from any directory: python scripts/generate-brand-icons.py
-Generated inspection evidence lives in .work/brand-icons.
+Generated inspection evidence lives in .work/brand-icons-tv-v039.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "src-tauri" / "icons" / "icon.svg"
 NATIVE = SOURCE.parent
 PUBLIC = ROOT / "public"
-WORK = ROOT / ".work" / "brand-icons"
+WORK = ROOT / ".work" / "brand-icons-tv-v039"
 SIZES = (16, 24, 32, 48, 64, 128, 256)
 
 
@@ -88,7 +88,7 @@ def make_contact_sheet() -> None:
     draw = ImageDraw.Draw(sheet)
     font = ImageFont.load_default(size=18)
     small_font = ImageFont.load_default(size=15)
-    draw.text((32, 25), "ACGN Hub / Story bookmarks", fill="#4C3B61", font=font)
+    draw.text((32, 25), "ACGN Hub / Warm television", fill="#4C3B61", font=font)
     for left, background, label, label_color in (
         (32, "#FFFFFF", "Light background / 256 px", "#695779"),
         (394, "#242032", "Dark background / 256 px", "#DACDE8"),
@@ -138,6 +138,7 @@ def main() -> None:
     make_contact_sheet()
     report = {
         "source": str(SOURCE.relative_to(ROOT)),
+        "design": "warm mauve television, cream screen and small smile; geometric vector mark",
         "sourceSha256": hashlib.sha256(SOURCE.read_bytes()).hexdigest(),
         "icoSha256": hashlib.sha256((NATIVE / "icon.ico").read_bytes()).hexdigest(),
         "entries": entries,

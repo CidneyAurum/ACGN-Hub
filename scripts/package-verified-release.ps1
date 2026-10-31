@@ -145,7 +145,7 @@ $manifest = [ordered]@{
     product = $productName
     version = $version
     platform = 'Windows x64'
-    releaseScope = if ($version -eq '0.3.8') { 'v038 Shinnku game archive downloads, Shionlib version catalog, multi-source discovery, combined game filters, version-scoped batches and isolated split-archive directories' } elseif ($version -eq '0.3.7') { 'v037 live VNDB Galgame discovery, official release/trial sources, curated verified game entries, KUN alias and pagination fixes; v036 local viewing and unified author search retained' } elseif ($version -eq '0.3.6') { 'v036 in-app comic/novel/video viewing, continuous/fullscreen reading, per-work continuation, manga edition selection and official Bangumi author search' } else { 'v035 real book discovery, unified bookmark-star branding, source curation and workflow fixes; naming and BT reliability retained' }
+    releaseScope = if ($version -eq '0.3.9') { 'v039 warm television branding across native icons, sidebar and favicon; existing v038 features retained' } elseif ($version -eq '0.3.8') { 'v038 Shinnku game archive downloads, Shionlib version catalog, multi-source discovery, combined game filters, version-scoped batches and isolated split-archive directories' } elseif ($version -eq '0.3.7') { 'v037 live VNDB Galgame discovery, official release/trial sources, curated verified game entries, KUN alias and pagination fixes; v036 local viewing and unified author search retained' } elseif ($version -eq '0.3.6') { 'v036 in-app comic/novel/video viewing, continuous/fullscreen reading, per-work continuation, manga edition selection and official Bangumi author search' } else { 'v035 real book discovery, unified bookmark-star branding, source curation and workflow fixes; naming and BT reliability retained' }
     sourceRepository = 'https://github.com/CidneyAurum/ACGN-Hub'
     thirdPartyNotices = $noticeFiles
     bookDiscovery = [ordered]@{
@@ -160,7 +160,7 @@ $manifest = [ordered]@{
         fabricatedRatings = $false
     }
     brandIcon = [ordered]@{
-        design = 'bookmark and star; no character artwork or AI-generated image'
+        design = 'warm mauve television, cream screen and small smile; geometric vector mark'
         repositorySvgPath = 'src-tauri/icons/icon.svg'
         svgSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $taskRoot 'src-tauri\icons\icon.svg')).Hash
         repositoryIcoPath = 'src-tauri/icons/icon.ico'
@@ -172,7 +172,7 @@ $manifest = [ordered]@{
         chineseMangaPrimary = @('MangaBZ', 'CopyManga')
         chineseNovelPrimary = @('LNovel TXT; illustrations excluded')
         backup = @('MangaDex multilingual original pages', 'public video submissions', 'Internet Archive public files')
-        galgame = if ($version -eq '0.3.8') { 'Shinnku public stable game files; Shionlib public per-edition file catalog requiring source verification for actual links; KUN community backup and VNDB official reference' } elseif ($version -eq '0.3.7') { 'KUN paginated community index; VNDB official release and trial entries; curated official demo/free store links and Stage-nana Japanese freeware archive' } else { 'external resource index; share page is not a direct file' }
+        galgame = if (@('0.3.8', '0.3.9') -contains $version) { 'Shinnku public stable game files; Shionlib public per-edition file catalog requiring source verification for actual links; KUN community backup and VNDB official reference' } elseif ($version -eq '0.3.7') { 'KUN paginated community index; VNDB official release and trial entries; curated official demo/free store links and Stage-nana Japanese freeware archive' } else { 'external resource index; share page is not a direct file' }
         rankingMeaning = 'adapter purpose preference; not a live availability or full-download guarantee'
         userConfigurationHandling = 'preserve existing addresses, tokens and enabled states'
         bookAuditRepositoryPath = 'docs/research/source-audit-v035-books.md'
@@ -185,7 +185,7 @@ $manifest = [ordered]@{
         pathHandling = 'native canonical checks within task or explicitly configured roots; no arbitrary parent allowance'
     }
     inAppViewer = [ordered]@{
-        available = (@('0.3.6', '0.3.7', '0.3.8') -contains $version)
+        available = (@('0.3.6', '0.3.7', '0.3.8', '0.3.9') -contains $version)
         comics = 'read-only CBZ pages; default continuous scroll or single-page mode, bounded nearby images, natural filename order, page jump, arrow keys, fullscreen toolbar/navigation and saved position'
         novels = 'UTF-8 TXT with optional BOM; plain-text chapter navigation, font size, line height, paper themes, reading width and saved scroll position'
         video = 'WebView2 media controls; bounded Range reads and saved playback position; codecs depend on the system'
@@ -246,7 +246,8 @@ $manifest = [ordered]@{
     nativeEvidenceAttached = [bool]$nativeRelativePath
 }
 if ($nativeRelativePath) {
-    if (@('0.3.7', '0.3.8') -contains $version) { $manifest['galgameNativeEvidence'] = $nativeRelativePath }
+    if ($version -eq '0.3.9') { $manifest['brandNativeEvidence'] = $nativeRelativePath }
+    elseif (@('0.3.7', '0.3.8') -contains $version) { $manifest['galgameNativeEvidence'] = $nativeRelativePath }
     else { $manifest['mangaNativeEvidence'] = $nativeRelativePath }
 }
 [IO.File]::WriteAllText($manifestPath, (ConvertTo-Json -InputObject $manifest -Depth 7), $utf8)

@@ -1,7 +1,7 @@
 {
   "name": "acgn-hub",
   "private": true,
-  "version": "0.3.8",
+  "version": "0.3.9",
   "description": "本地 ACGN 下载任务中心",
   "type": "module",
   "scripts": {

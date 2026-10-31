@@ -5,7 +5,7 @@ withDefaults(defineProps<{ size?: number }>(), { size: 36 });
 <template>
   <img
     class="brand-mark"
-    src="/brand/acgn-mark.svg"
+    src="/brand/acgn-mark.svg?v=warm-tv-039"
     :width="size"
     :height="size"
     alt=""
@@ -19,5 +19,8 @@ withDefaults(defineProps<{ size?: number }>(), { size: 36 });
   display: block;
   flex: 0 0 auto;
   object-fit: contain;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
 }
 </style>

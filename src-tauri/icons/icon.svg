@@ -1,20 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none">
   <defs>
-    <linearGradient id="tile" x1="32" y1="18" x2="226" y2="242" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#A47ADF"/>
-      <stop offset=".52" stop-color="#8460C7"/>
-      <stop offset="1" stop-color="#6343A6"/>
+    <linearGradient id="frame" x1="38" y1="62" x2="224" y2="230" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#CBAACB"/>
+      <stop offset="1" stop-color="#AC91C2"/>
     </linearGradient>
-    <linearGradient id="paper" x1="88" y1="53" x2="182" y2="205" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#F0E9FC"/>
+    <linearGradient id="screen" x1="128" y1="78" x2="128" y2="202" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFCF7"/>
+      <stop offset="1" stop-color="#FFF5ED"/>
     </linearGradient>
   </defs>
-  <rect x="8" y="8" width="240" height="240" rx="58" fill="url(#tile)"/>
-  <rect x="9" y="9" width="238" height="238" rx="57" stroke="#FFFFFF" stroke-opacity=".18" stroke-width="2"/>
-  <path d="M65 77a14 14 0 0 1 14-14h68a14 14 0 0 1 14 14v121l-48-26-48 26V77Z" transform="rotate(-12 113 131)" fill="#D6C5F3"/>
-  <path d="M98 54h69a15 15 0 0 1 15 15v135l-49-28-50 28V69a15 15 0 0 1 15-15Z" fill="#52368B" fill-opacity=".19" transform="translate(4 4)"/>
-  <path d="M98 54h69a15 15 0 0 1 15 15v135l-49-28-50 28V69a15 15 0 0 1 15-15Z" fill="url(#paper)"/>
-  <path d="M151 79c5 20 10 25 30 30-20 5-25 10-30 30-5-20-10-25-30-30 20-5 25-10 30-30Z" fill="#8B65CA"/>
-  <path d="M197 51c3 12 6 15 18 18-12 3-15 6-18 18-3-12-6-15-18-18 12-3 15-6 18-18Z" fill="#F5C6DA"/>
+  <path d="m84 19 44 40 44-40" stroke="#B496BF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m78 222-5 18m110-18 5 18" stroke="#AC91C2" stroke-width="13" stroke-linecap="round"/>
+  <rect x="16" y="60" width="224" height="168" rx="40" fill="url(#frame)"/>
+  <rect x="32" y="76" width="192" height="128" rx="27" fill="url(#screen)"/>
+  <path d="M83 129h11m68 0h11m-65 29c10 10 30 10 40 0" stroke="#A587B7" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="199" cy="216" r="4" fill="#E9C0C1"/>
 </svg>
