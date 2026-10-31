@@ -1,6 +1,6 @@
 # ACGN Hub 0.3.6 工作计划与当前状态
 
-## 0.3.6 当前工作：本地验收完成，GitHub发布准备中
+## 0.3.6 当前交付：验收及GitHub正式发布完成
 
 本轮围绕用户实际反馈收敛：修复CBZ第1页读取失败，完成连续长屏及全屏翻页；提供TXT轻小说阅读器、按作品的已下载目录和同版接续；保留《安达与岛村》不同改编版；作者名与作品名共用一个搜索框并直接返回作品。原来源配置、任务、媒体与旧版交付继续保留，未将人物卡或模式选择作为最终交互。
 
@@ -16,7 +16,8 @@
 | 最终构建及扫描 | 最终exe25,553,408字节/SHA95D19A…613403F4、NSIS7,223,620字节/SHAD0AFD2…1324A29已构建扫描打包；两项退出0、防护开启、无新增检测，NSIS未实际安装。此前6D1B…候选保留独立历史身份 |
 | 数据保留 | `.work/v036-evidence/data-preservation.json`为passed：10个来源ID保留，其中3条配置在用户并行使用期间修改，保留当前值不回滚；原2任务/3资源/1作品等原有记录保持，选版验证新增1作品。3个媒体文件内容hash及12个旧exe不变，DB完整性ok |
 | 交付入口与本地产物 | 桌面快捷方式已指向START-ACGN-0.3.6.cmd与036exe图标，继续使用原032Data；程序、安装包及清单已打包。ZIP9,556,150字节/SHA8C1E8267…CEFDCD58，10条目CRC及每项hash通过、不含用户Data，见`.work/v036-evidence/delivery-assets.json` |
-| 私有源码与Release草稿 | 生产代码提交`cfa5f121c351189259f5ab16c86ba6eb5adcca76`已推main，已核查private；v0.3.6草稿7资产已实际下载回验，大小/SHA256/API digest全部一致，`.work/v036-evidence/github-draft-verification.json`为passed，下载ZIP白名单/10条目CRC/逐项hash/noData及VERSION/SHA9项/外层6项校验通过。正式标签/发布及最终JSON仍待回执，不将草稿写成正式发布 |
+| 私有源码、标签与正式Release | [v0.3.6正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.6)已完成，private=true、isDraft=false、非预发布。标签固定`427bbe48e646169e8aad8da63f8352abd2e01ac5`，发布核验时main/tag一致；后续main仅补文档回执。7资产实际下载大小/SHA256/API digest一致，下载ZIP白名单/10条目CRC/逐项hash/noData及VERSION/SHA9项/外层6项通过；`.work/v036-evidence/github-published-verification.json`为passed |
+| 最终汇总 | `.work/v036-evidence/verification-final.json`已实际生成、allChecksPassed=true，聚合450unit/86Rust（另2忽略）/67完整E2E/最后7项、最终正常桌面漫画与直接作品搜索/第60话目录/重启、数据、快捷方式、ZIP和GitHub；TXT/接续/视频仍按报告scopeLimits保留固定响应验证边界 |
 
 [本轮实现与证据边界](docs/research/local-viewing-v036.md)单列已修失败、真实API检查及剩余验收。NSIS实际安装不在本轮便携验收范围；内置视频支持取决于系统/WebView解码，不把打开入口或浏览器模拟写为所有格式播放通过。
 

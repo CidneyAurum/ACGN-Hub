@@ -1,6 +1,6 @@
 # 0.3.6 本地观看、改编版本与统一搜索
 
-记录日期：2026-10-31，Windows x64。本轮源码功能已实现，最终统一搜索程序95D19A…已构建、静态扫描并打包；正式程序的正常桌面、重启、数据保留及快捷方式已完成本地验收，GitHub正式发布仍在准备中。本文保留此前失败与候选的独立身份，未提前填写尚未取得的发布回执。
+记录日期：2026-10-31，Windows x64。最终统一搜索程序95D19A…已构建、静态扫描并打包；正式程序的正常桌面、重启、数据保留及快捷方式已验收，[GitHub 0.3.6正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.6)及最终汇总已完成。本文保留此前失败、候选与最终文件的独立身份，并区分正常桌面实测和固定响应测试范围。
 
 ## 用户操作与实现范围
 
@@ -57,9 +57,11 @@ Copy目录中的内部`index=67`是排序位置，不能解释为第67话。现�
 | 数据保留 | `.work/v036-evidence/data-preservation.json`为passed、DB完整性ok。10个来源ID保留，3条配置在用户并行使用期间修改，保留当前值不回滚；原2任务/3资源/1作品/1外部ID/0本地索引不变，选版核验新增1作品（现2）。3个媒体payload含CBZ的内容hash及12个旧exe保持 |
 | 桌面入口 | `.work/v036-evidence/shortcut-verification.json`为passed：桌面ACGN Hub.lnk指向START-ACGN-0.3.6.cmd，图标取正式036exe，继续使用原`release/v0.3.2/Data` |
 | 本地便携ZIP | `.work/v036-evidence/delivery-assets.json`：`ACGN-Hub-0.3.6-windows-x64.zip`为9,556,150字节，SHA256 `8C1E8267F5D27DF0D451F9C21FCFE7CEE1DCBBC3C1AE9E2881F2D90ECEFDCD58`；10条目CRC和每项hash通过，不含用户Data。VERSION补入最终原生证据路径，exe与安装包哈希保持 |
-| 私有源码与发布草稿回验 | 生产代码提交`cfa5f121c351189259f5ab16c86ba6eb5adcca76`已推main；`.work/v036-evidence/github-draft-verification.json`为passed、private=true、isDraft=true。7资产已实际下载，大小/SHA256/API digest全部匹配；下载ZIP10条目白名单/CRC/每项hash/noData、VERSION/SHA9项及外层6项校验通过。正式标签/发布及最终汇总JSON仍待回执，尚未声明正式发布完成 |
+| 资产实际下载回验 | `.work/v036-evidence/github-draft-verification.json`记录草稿阶段passed、private=true、isDraft=true。7资产已实际下载，大小/SHA256/API digest全部匹配；下载ZIP10条目白名单/CRC/每项hash/noData、VERSION/SHA9项及外层6项校验通过，保留该阶段历史身份 |
+| 私有源码及正式Release | [正式远端核验](../../.work/v036-evidence/github-published-verification.json)为passed，private=true、isDraft=false、非预发布；7资产metadata与实际下载hash一致。正式标签`v0.3.6`固定于`427bbe48e646169e8aad8da63f8352abd2e01ac5`，发布核验时main/tag一致，后续main仅补发布文档回执 |
+| 最终汇总 | [verification-final.json](../../.work/v036-evidence/verification-final.json)已实际生成、allChecksPassed=true，聚合450unit/86Rust（另2忽略）/67完整E2E/最后7项、最终正常桌面漫画/直接作品搜索/第60话目录/重启、数据、快捷方式、ZIP和GitHub；scopeLimits仍明确TXT/自动接续/视频控件为unit/E2E固定响应覆盖 |
 
-此前6D1B候选程序、安装包和清单保存在`.work/v036-evidence/pre-unified-candidate`，原生失败另在`normal-viewer-v036*`历史目录；这些本机证据不随源码上传。最终哈希取本次扫描文件，尚未填写未取得的标签提交或`allChecksPassed`。TXT阅读器及自动接续主要通过固定响应测试验证，不将其写成正式桌面全卷下载或跨卷接续实测。
+此前6D1B候选程序、安装包和清单保存在`.work/v036-evidence/pre-unified-candidate`，原生失败另在`normal-viewer-v036*`历史目录；这些本机证据不随源码上传。最终哈希取本次扫描文件，正式标签与最终报告均按实际回执记录。TXT阅读器及自动接续主要通过固定响应测试验证，不将其写成正式桌面全卷下载或跨卷接续实测。
 
 ## 参考与保留边界
 
