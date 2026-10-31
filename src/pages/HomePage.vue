@@ -5,6 +5,8 @@ import MediaCard from "@/components/MediaCard.vue";
 import MediaPoster from "@/components/MediaPoster.vue";
 import AppIcon from "@/components/AppIcon.vue";
 import BookDiscovery from "@/components/BookDiscovery.vue";
+import GalgameDiscovery from "@/components/GalgameDiscovery.vue";
+import GalgameResourceGuide from "@/components/GalgameResourceGuide.vue";
 import { getDiscoveryCalendar, type DiscoveryResult } from "@/infrastructure/metadata/discovery-provider";
 import { useMediaLibraryStore } from "@/stores/media-library";
 import { useSearchSessionStore } from "@/stores/search-session";
@@ -56,6 +58,7 @@ const picked = ref(0);
 type DiscoveryMode = "anime" | "manga" | "novel" | "visual_novel";
 const mode = computed<DiscoveryMode>(() => route.query.type === "manga" || route.query.type === "novel" || route.query.type === "visual_novel" ? route.query.type : "anime");
 const bookSort = computed(() => route.query.bookSort === "score" || route.query.bookSort === "recent" ? route.query.bookSort : "heat");
+const galSort = computed(() => route.query.galSort === "recent" ? "recent" : "rating");
 const weekdays = ["一", "二", "三", "四", "五", "六", "日"];
 const allMedia = computed(() => [...new Map([...(calendar.value?.days.flatMap((value) => value.items) ?? []), ...seasonItems.value].map((item) => [item.id, item])).values()]);
 const popular = computed(() => seasonItems.value);
@@ -114,6 +117,9 @@ function chooseMode(next: DiscoveryMode): void {
 }
 function chooseBookSort(sort: "heat" | "score" | "recent"): void {
   void router.push({ query: { ...route.query, bookSort: sort === "heat" ? undefined : sort } }).catch(() => undefined);
+}
+function chooseGalSort(sort: "rating" | "recent"): void {
+  void router.push({ query: { ...route.query, galSort: sort === "rating" ? undefined : sort } }).catch(() => undefined);
 }
 function chooseSeason(event: Event): void {
   const key = (event.target as HTMLSelectElement).value;
@@ -216,10 +222,7 @@ function remember(media: Media): void { session.remember([{ media, score: 100, r
       </section>
     </template>
     <BookDiscovery v-else-if="mode === 'manga' || mode === 'novel'" :type="mode" :sort="bookSort" :saved="savedByType" :saving="saving" :is-saved="library.isSaved" @toggle-save="toggleSaved" @change-sort="chooseBookSort" />
-    <template v-else>
-      <section class="other-type-intro"><div><span>Galgame · 你的收藏</span><h2>下一段故事，由你选择。</h2><p>搜索作品资料，或直接从来源寻找准确的作品。</p><div><RouterLink class="primary-button" :to="{ path: '/search', query: { type: mode } }">搜索 Galgame</RouterLink><RouterLink class="ghost-button" :to="{ path: '/resources', query: { type: mode } }">直接寻找资源</RouterLink></div></div><AppIcon name="games" :size="110" /></section>
-      <section class="discovery-section"><div class="discovery-section-heading"><div><span class="section-marker"></span><h2>已收藏的{{ typeNames[mode] }}</h2></div><RouterLink :to="{ path: '/library', query: { type: mode } }">查看全部 →</RouterLink></div><div v-if="savedByType.length" class="poster-wall"><MediaCard v-for="media in savedByType" :key="media.id" :media="media" :saved="true" @toggle-save="toggleSaved" /></div><div v-else class="schedule-empty">这里还没有收藏。搜索一部喜欢的作品，从第一本开始。</div></section>
-    </template>
+    <GalgameDiscovery v-else :sort="galSort" :saved="savedByType" :saving="saving" :is-saved="library.isSaved" @toggle-save="toggleSaved" @change-sort="chooseGalSort"><template #resources><GalgameResourceGuide /></template></GalgameDiscovery>
   </div>
 </template>
 <style scoped>

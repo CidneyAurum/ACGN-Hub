@@ -1,6 +1,6 @@
 /** Recognized only to retire old saved configurations safely; never offer as active sources. */
 export type RetiredSourceConfigType = "weebcentral" | "kuaikan";
-export type SourceConfigType = "rss" | "github_release" | "kungal" | "copymanga" | "jmcomic" | "mangadex" | "mangabz" | "archive" | "lnovel" | "public_video" | RetiredSourceConfigType;
+export type SourceConfigType = "rss" | "github_release" | "kungal" | "vndb_release" | "copymanga" | "jmcomic" | "mangadex" | "mangabz" | "archive" | "lnovel" | "public_video" | RetiredSourceConfigType;
 
 export function isRetiredSourceType(value: unknown): value is RetiredSourceConfigType {
   return value === "weebcentral" || value === "kuaikan";

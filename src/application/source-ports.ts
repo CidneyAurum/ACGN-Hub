@@ -15,6 +15,8 @@ export interface SourceSearchResult {
   sourceId: string;
   sourceItemId: string;
   title: string;
+  /** Alternate titles supplied by the source, retained for matching after search. */
+  aliases?: string[];
   coverUrl?: string;
   releaseYear?: number;
   raw?: Record<string, unknown>;

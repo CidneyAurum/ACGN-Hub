@@ -16,6 +16,7 @@ export function sourceDescription(config: SourceConfig): string {
     case "lnovel": return "中文轻小说目录、分卷与 TXT。首次加载目录最多等候 35 秒，之后复用缓存；也可用站点作品 ID / 链接直接检索。";
     case "archive": return "Internet Archive 公开条目；附件格式及可访问性取决于原始发布者。";
     case "kungal": return "Galgame 资源索引；站外资源可能需要单独访问，网页链接不等同于文件直链。";
+    case "vndb_release": return "VNDB 官方发行记录，中文优先；区分试玩、完整版和补丁，打开对应官网或商店获取游戏。";
     case "jmcomic": return "可选本地 Python 桥接，需要桌面端和已安装的 jmcomic；生成 CBZ。";
     default: return "自定义来源；启用前请检查地址、来源类型和连接状态。";
   }

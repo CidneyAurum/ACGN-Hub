@@ -63,6 +63,15 @@ export const DEFAULT_RESOURCE_SOURCE_CONFIGS: readonly SourceConfig[] = [
     updatedAt: DEFAULT_SOURCE_TIMESTAMP,
   },
   {
+    id: "builtin:vndb-releases",
+    type: "vndb_release",
+    name: "VNDB · 官方发行与试玩",
+    url: "https://api.vndb.org/kana",
+    enabled: false,
+    createdAt: "2026-10-31T00:00:00.000Z",
+    updatedAt: "2026-10-31T00:00:00.000Z",
+  },
+  {
     id: "builtin:mangadex",
     type: "mangadex",
     name: "MangaDex 漫画",

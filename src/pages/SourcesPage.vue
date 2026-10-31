@@ -60,6 +60,7 @@ const latestDiagnostics = computed(() => {
 watch(type, (value) => {
   const defaults: Record<string, { url: string; name: string }> = {
     mangabz: { url: "https://mangabz.com", name: "MangaBZ · 中文日漫" },
+    vndb_release: { url: "https://api.vndb.org/kana", name: "VNDB · 官方发行与试玩" },
   };
   if (defaults[value]) { url.value = defaults[value].url; if (!name.value.trim()) name.value = defaults[value].name; }
   if (value === "public_video") {
@@ -108,6 +109,7 @@ function sourceTypeLabel(type: string): string {
     archive: "Internet Archive",
     copymanga: "拷贝漫画",
     kungal: "鲲 Galgame",
+    vndb_release: "VNDB 官方发行",
     jmcomic: "JMComic",
     github_release: "GitHub Releases",
     public_video: "B站公开投稿",
@@ -149,7 +151,7 @@ async function addSource(): Promise<void> {
   try {
     if (type.value === "rss") {
       if (!isHttpUrl(sourceUrl)) throw new Error("RSS 来源必须是不带认证信息的 HTTP/HTTPS 地址");
-    } else if (["public_video", "mangabz"].includes(type.value)) {
+    } else if (["public_video", "mangabz", "vndb_release"].includes(type.value)) {
       createSourceProvider({ id: "validation", type: type.value, name: sourceName, url: sourceUrl, enabled: false, createdAt: "", updatedAt: "" });
     } else if (type.value === "github_release") {
       parseGithubRepositoryUrl(sourceUrl);
@@ -416,8 +418,8 @@ function isHttpUrl(value: string): boolean {
   <section class="card">
     <form class="source-form" @submit.prevent="addSource">
       <label><span>来源名称</span><input v-model="name" type="text" placeholder="例如：我的更新源" required /></label>
-      <label><span>来源类型</span><select v-model="type"><option value="rss">RSS / Atom（附件 / 磁力 / 种子）</option><option value="public_video">B站公开投稿（MP4）</option><option value="lnovel">LNovel 中文轻小说</option><option value="mangadex">MangaDex 漫画</option><option value="mangabz">MangaBZ · 中文日漫</option><option value="archive">Internet Archive</option><option value="copymanga">拷贝漫画</option><option value="kungal">鲲 Galgame</option><option value="jmcomic">JMComic（需 Python）</option><option value="github_release">GitHub Releases</option></select></label>
-      <label><span>{{ type === "mangabz" ? "MangaBZ 网站地址" : type === "public_video" ? "B站公开投稿来源地址" : type === "github_release" ? "GitHub 仓库地址" : type === "lnovel" ? "LNovel API 地址" : type === "mangadex" ? "MangaDex API 地址" : type === "archive" ? "Internet Archive 地址" : type === "copymanga" ? "拷贝漫画 API 地址" : type === "kungal" ? "鲲 Galgame 地址" : type === "jmcomic" ? "JMComic 地址" : "RSS/Atom 地址" }}</span><input v-model="url" type="url" :placeholder="type === 'mangabz' ? 'https://mangabz.com' : type === 'public_video' ? 'https://www.bilibili.com' : type === 'github_release' ? 'https://github.com/owner/repo' : type === 'lnovel' ? 'https://lnovel.animes.garden' : type === 'mangadex' ? 'https://api.mangadex.org' : type === 'archive' ? 'https://archive.org' : type === 'copymanga' ? 'https://mapi.hotmangasg.com' : type === 'kungal' ? 'https://www.kungal.com' : type === 'jmcomic' ? 'python://jmcomic' : 'https://example.com/feed.xml'" required /></label>
+      <label><span>来源类型</span><select v-model="type"><option value="rss">RSS / Atom（附件 / 磁力 / 种子）</option><option value="public_video">B站公开投稿（MP4）</option><option value="lnovel">LNovel 中文轻小说</option><option value="mangadex">MangaDex 漫画</option><option value="mangabz">MangaBZ · 中文日漫</option><option value="archive">Internet Archive</option><option value="copymanga">拷贝漫画</option><option value="kungal">鲲 Galgame</option><option value="vndb_release">VNDB 官方发行与试玩</option><option value="jmcomic">JMComic（需 Python）</option><option value="github_release">GitHub Releases</option></select></label>
+      <label><span>{{ type === "mangabz" ? "MangaBZ 网站地址" : type === "public_video" ? "B站公开投稿来源地址" : type === "github_release" ? "GitHub 仓库地址" : type === "lnovel" ? "LNovel API 地址" : type === "mangadex" ? "MangaDex API 地址" : type === "archive" ? "Internet Archive 地址" : type === "copymanga" ? "拷贝漫画 API 地址" : type === "kungal" ? "鲲 Galgame 地址" : type === "vndb_release" ? "VNDB API 地址" : type === "jmcomic" ? "JMComic 地址" : "RSS/Atom 地址" }}</span><input v-model="url" type="url" :placeholder="type === 'mangabz' ? 'https://mangabz.com' : type === 'public_video' ? 'https://www.bilibili.com' : type === 'github_release' ? 'https://github.com/owner/repo' : type === 'lnovel' ? 'https://lnovel.animes.garden' : type === 'mangadex' ? 'https://api.mangadex.org' : type === 'archive' ? 'https://archive.org' : type === 'copymanga' ? 'https://mapi.hotmangasg.com' : type === 'kungal' ? 'https://www.kungal.com' : type === 'vndb_release' ? 'https://api.vndb.org/kana' : type === 'jmcomic' ? 'python://jmcomic' : 'https://example.com/feed.xml'" required /></label>
       <label v-if="type === 'copymanga'"><span>拷贝漫画 Token（可选）</span><input v-model="token" type="password" placeholder="公开章节无需填写；受限章节再粘贴 Token" autocomplete="off" /></label>
       <button class="primary-button" type="submit">添加来源</button>
     </form>

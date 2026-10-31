@@ -8,7 +8,7 @@ import { createJsonFetcher, type JsonFetcher } from "./json-transport";
 
 const VNDB_API = "https://api.vndb.org/kana";
 const VNDB_FIELDS =
-  "title,alttitle,titles{title,latin,lang,official,main},aliases,olang,released,languages,platforms,image{url,thumbnail},description,rating,votecount";
+  "title,alttitle,titles{title,latin,lang,official,main},aliases,olang,released,languages,platforms,image{url,thumbnail,sexual,violence},description,rating,votecount";
 // Extended field set used only by getDetails(); kept separate so a schema
 // change on VNDB's side can never break plain search/getById.
 const VNDB_DETAIL_FIELDS =
@@ -25,6 +25,8 @@ const imageSchema = z
   .object({
     url: z.string().url(),
     thumbnail: z.string().url().nullable().optional(),
+    sexual: z.number().min(0).max(2).nullable().optional(),
+    violence: z.number().min(0).max(2).nullable().optional(),
   })
   .passthrough()
   .nullable()
@@ -95,6 +97,22 @@ export interface VndbProviderOptions {
   userAgent?: string;
 }
 
+export type VndbDiscoverySort = "rating" | "recent";
+export interface VndbDiscoveryOptions {
+  sort?: VndbDiscoverySort;
+  page?: number;
+  refresh?: boolean;
+  now?: Date;
+}
+export interface VndbDiscoveryResult {
+  items: Media[];
+  sort: VndbDiscoverySort;
+  page: number;
+  hasMore: boolean;
+  updatedAt: string;
+  cached: boolean;
+}
+
 export class VndbProvider implements MetadataProvider {
   readonly id = "vndb";
   readonly supportedTypes = ["visual_novel"] as const;
@@ -104,6 +122,7 @@ export class VndbProvider implements MetadataProvider {
   private readonly maxRetries: number;
   private readonly userAgent: string;
   private readonly sleep: Sleep;
+  private discoveryGeneration = 0;
 
   constructor(options: VndbProviderOptions = {}) {
     this.fetcher = options.fetcher ?? createJsonFetcher();
@@ -112,6 +131,38 @@ export class VndbProvider implements MetadataProvider {
     this.maxRetries = options.maxRetries ?? 1;
     this.userAgent = options.userAgent ?? "ACGN-Hub/0.1 (local desktop app)";
     this.sleep = options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  }
+
+  /** Anonymous official catalog; language availability includes fan translations. */
+  async discover(options: VndbDiscoveryOptions = {}): Promise<VndbDiscoveryResult> {
+    const sort = options.sort ?? "rating";
+    const page = options.page ?? 1;
+    const now = options.now ?? new Date();
+    if (!["rating", "recent"].includes(sort) || !Number.isInteger(page) || page < 1 || page > 100 || !Number.isFinite(now.getTime())) {
+      throw new VndbProviderError("bad_request", "Galgame 推荐排序、页码或日期无效");
+    }
+    const today = localDate(now);
+    if (options.refresh) this.discoveryGeneration++;
+    const cacheKey = `vndb:discovery:${this.discoveryGeneration}:${sort}:${today}:${page}`;
+    if (!options.refresh) {
+      const cached = this.cache.get<VndbDiscoveryResult>(cacheKey);
+      if (cached) return { ...cached, cached: true };
+    }
+    return this.cache.getOrLoad<VndbDiscoveryResult>(cacheKey, 30 * 60_000, async () => {
+      const filters: unknown[] = ["and", ["or", ["lang", "=", "zh-Hans"], ["lang", "=", "zh-Hant"]],
+        ["votecount", ">=", sort === "rating" ? 50 : 5], ["released", "<=", today]];
+      if (sort === "recent") {
+        const start = new Date(now);
+        const year = now.getFullYear() - 2;
+        start.setFullYear(year, now.getMonth(), Math.min(now.getDate(), new Date(year, now.getMonth() + 1, 0).getDate()));
+        filters.push(["released", ">=", localDate(start)]);
+      }
+      const response = await this.request(`${VNDB_API}/vn`, "POST", {
+        filters, fields: VNDB_FIELDS, sort: sort === "recent" ? "released" : "rating", reverse: true, results: 24, page,
+      });
+      const parsed = parseResponse(response.body);
+      return { items: parsed.results.map(toMedia), sort, page, hasMore: parsed.more, updatedAt: now.toISOString(), cached: false };
+    });
   }
 
   async search(query: MetadataSearchQuery): Promise<Media[]> {
@@ -267,7 +318,10 @@ function toMedia(subject: z.infer<typeof visualNovelSchema>): Media {
   const title = chineseTitle || subject.title;
   const originalTitle = subject.alttitle?.trim() || titleCandidates.find((value) => value !== title);
   const aliases = [...new Set([subject.title, subject.alttitle ?? undefined, ...subject.aliases, ...titleCandidates].filter(Boolean))] as string[];
-  const coverUrl = subject.image?.url || subject.image?.thumbnail || undefined;
+  // VNDB's image flag is an average: 0 safe, 1 nudity, 2 sexual content.
+  // Keep neutral placeholders for flagged images, including on search/details.
+  const safeImage = subject.image && (subject.image.sexual ?? 0) < 1 && (subject.image.violence ?? 0) < 2 ? subject.image : undefined;
+  const coverUrl = safeImage?.url || safeImage?.thumbnail || undefined;
   const releaseYear = subject.released ? Number(subject.released.slice(0, 4)) : undefined;
 
   return {
@@ -286,7 +340,8 @@ function toMedia(subject: z.infer<typeof visualNovelSchema>): Media {
       released: subject.released ?? null,
       languages: subject.languages,
       platforms: subject.platforms,
-      rating: subject.rating ?? null,
+      rating: normalizeVndbRating(subject.rating) ?? null,
+      vndbRating: subject.rating ?? null,
       voteCount: subject.votecount ?? null,
     },
   };
@@ -345,7 +400,7 @@ function toDetails(subject: z.infer<typeof visualNovelSchema>): MediaDetails {
     externalId: subject.id,
     ...(detail.description ? { summary: cleanVndbDescription(detail.description) } : {}),
     tags,
-    ...(detail.rating !== null && detail.rating !== undefined ? { rating: { score: detail.rating, count: detail.votecount ?? undefined } } : {}),
+    ...(normalizeVndbRating(detail.rating) !== undefined ? { rating: { score: normalizeVndbRating(detail.rating)!, count: detail.votecount ?? undefined } } : {}),
     ...(typeof detail.length_minutes === "number" && detail.length_minutes > 0 ? { durationMinutes: Math.round(detail.length_minutes) } : {}),
     airDate: detail.released ?? undefined,
     studios: developers,
@@ -390,4 +445,11 @@ function cleanVndbDescription(description: string): string {
     .replace(/\[(?:spoiler|b|i|u|s)\]([\s\S]*?)\[\/(?:spoiler|b|i|u|s)\]/gi, "$1")
     .replace(/\[[^\]]*\]/g, "")
     .trim();
+}
+
+function normalizeVndbRating(value: number | null | undefined): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100 ? value / 10 : undefined;
+}
+function localDate(now: Date): string {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }

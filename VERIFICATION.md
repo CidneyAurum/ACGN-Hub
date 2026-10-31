@@ -1,5 +1,24 @@
 # ACGN Hub 0.3 验证记录
 
+## 最新增量：0.3.7 Galgame 发现与资源
+
+最终程序 SHA256 `C461B9EB29B7327271FB4F6B85A54529E389588F84889B71BF8955EE7924D781`，NSIS 为 `C729E4A6A586687DEB2897EAC5C5290E51A457746AA9EABA6E450BA8FD09953F`。最终程序以隔离测试资料完成 Windows UIAutomation 原生验收，未读取浏览器 Cookie，未使用 CDP／注入脚本或修改防护。安装包未实际安装。
+
+| 验证 | 结果与证据 |
+| --- | --- |
+| 类型检查及生产构建 | 通过，桌面打包内含相同生产前端 |
+| Vitest | 58 文件／487 项通过，`.work/v037-final2-vitest.json` |
+| Rust | 86 通过／2 默认忽略／0 失败，未修改原生下载与阅读实现 |
+| 完整浏览器 | 74 项通过，`.work/e2e/v037-final-full-results/.last-run.json` |
+| 最后上下文修复回归 | 12 项通过，`.work/e2e/v037-final-context-results/.last-run.json`；覆盖 Galgame、来源导航、共用官网发行版本保留和直链任务的中文名称 |
+| 实际原生来源 | 最终 exe 重启后恢复已保存来源作品，ATRI 58 条／安卓 28 条，CLANNAD 官方 32 条／中文 1 条；不再有动画跨季误提示，无外链批量下载按钮。`.work/v037-evidence/native-verification.json` |
+| 静态扫描 | 最终 exe、NSIS 均通过；`.work/security-audit/v037-context-final-scan.json`；最终原生 session 无新增检测 |
+| 原用户数据 | 9 个数据库表、3 个媒体文件、14 个旧 exe 保持，DB 完整性 ok；`.work/v037-evidence/data-preservation.json` |
+| 桌面入口 | 指向 `START-ACGN-0.3.7.cmd`，图标取新 exe，继续使用原 `release/v0.3.2/Data`；`.work/v037-evidence/shortcut-verification.json` |
+| 便携 ZIP | 9,565,661 字节，10 条目白名单、CRC 和逐项 hash 通过；不含用户资料。`.work/v037-evidence/delivery-assets.json` |
+
+官方试玩／免费标记、具体语言和版本已按公开接口核对。原厂 LZH 仅检查 HEAD、Range、文件长度和文件头；没有将有限字节请求当作完整游戏下载。KUN 网盘的权限、存活与速度没有逐个验证。更多范围见 [0.3.7 交付记录](docs/research/galgame-v037-delivery.md)；源码与包上传至 [私有 0.3.7 发布页](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.7)。
+
 ## 最新增量：0.3.6 本地观看与统一作者搜索（验收及正式发布完成）
 
 本轮最终交互为“同一搜索框输入作品名或作者名，直接看作品”，没有人物卡或预先选择模式。CBZ连续/单页阅读、全屏完整控件、TXT章节阅读、按作品目录及已下载同版接续已实现。最终正式程序的正常桌面、重启、数据保留和快捷方式已验收；[GitHub 0.3.6正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.6)及最终汇总已完成。下表区分工程测试、此前候选与最终程序；详细范围见[本轮记录](docs/research/local-viewing-v036.md)。

@@ -25,6 +25,32 @@ function providerFixture() {
   return provider;
 }
 
+it("keeps a shared official page for distinct trial, full and platform releases through discovery", async () => {
+  const provider = providerFixture();
+  provider.supportedTypes.splice(0, 1, "visual_novel");
+  vi.mocked(provider.search).mockResolvedValue([{ sourceId: "vndb-releases", sourceItemId: "v123", title: "固定视觉小说" }]);
+  const base: ResourceItem = { id: "full", sourceId: "vndb-releases", sourceItemId: "v123", title: "固定视觉小说 · 完整发行版", protocol: "http", targetUrl: "https://game.example/official/", metadata: { downloadMode: "external_link", vndbReleaseId: "r1" }, createdAt: "2026-10-31" };
+  vi.mocked(provider.listResources).mockResolvedValue([base,
+    { ...base, id: "trial", title: "固定视觉小说 · 试玩版", metadata: { downloadMode: "external_link", vndbReleaseId: "r2" } },
+    { ...base, id: "console", title: "固定视觉小说 · 主机发行版", metadata: { downloadMode: "external_link", vndbReleaseId: "r3" } },
+    { ...base, id: "same-edition-duplicate", targetUrl: base.targetUrl + "#download" },
+  ]);
+  const result = await discoverResources({ keyword: "固定视觉小说", mediaType: "visual_novel", sources: [{ ...source, type: "vndb_release", url: "https://api.vndb.org/kana" }] }, () => provider);
+  expect(result.items.map((item) => item.resource.id)).toEqual(["full", "trial", "console"]);
+});
+
+it("never applies anime-season warnings to Galgame full-save archives in search or exact work reload", async () => {
+  const provider = providerFixture();
+  provider.supportedTypes.splice(0, 1, "visual_novel");
+  vi.mocked(provider.search).mockResolvedValue([{ sourceId: "kungal", sourceItemId: "12", title: "亚托莉" }]);
+  vi.mocked(provider.listResources).mockResolvedValue([{ id: "game-full-save", sourceId: "kungal", sourceItemId: "12", title: "亚托莉 · 全集存档+PC+安卓", protocol: "http", targetUrl: "https://game.example/resource/12", metadata: { downloadMode: "external_link" }, createdAt: "2026-10-31" }]);
+  const config: SourceConfig = { ...source, type: "kungal" };
+  const discovered = await discoverResources({ keyword: "亚托莉", mediaType: "visual_novel", sources: [config] }, () => provider);
+  const reloaded = await loadSourceItemResources({ config, sourceItemId: "12", title: "亚托莉", mediaType: "visual_novel" }, () => provider);
+  expect(discovered.items[0].warnings).toEqual([]);
+  expect(reloaded.resources[0].metadata.matchWarnings).toEqual([]);
+});
+
 const archiveSource: SourceConfig = { ...source, id: "archive", type: "archive", name: "公开档案", url: "https://archive.org" };
 function archiveDurationFixture() {
   return new InternetArchiveSourceProvider(undefined, { fetcher: async (url) => ({ status: 200, json: async () => url.includes("/advancedsearch.php")

@@ -28,6 +28,7 @@ describe("VndbProvider", () => {
       originalTitle: "フェイト／ステイナイト",
       releaseYear: 2004,
       coverUrl: "https://s.vndb.org/v17/0f/17.jpg",
+      metadata: { rating: 8.8, vndbRating: 88 },
     });
     expect(request).toHaveBeenCalledWith(
       "https://api.vndb.org/kana/vn",
@@ -77,7 +78,7 @@ describe("VndbProvider", () => {
     expect(details).toMatchObject({
       providerId: "vndb",
       externalId: "v17",
-      rating: { score: 88, count: 1000 },
+      rating: { score: 8.8, count: 1000 },
       durationMinutes: 3000,
       airDate: "2004-01-30",
       developers: ["TYPE-MOON"],
@@ -110,5 +111,67 @@ describe("VndbProvider", () => {
     expect(details.characters).toEqual([]);
     expect(details.tags.length).toBeGreaterThan(0);
     expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("discovers Chinese-available rated works through the official anonymous catalog with real pagination", async () => {
+    const request = fetcher(response(200, { ...vndbSearchFixture, more: true }), response(200, vndbSearchFixture));
+    const provider = new VndbProvider({ fetcher: request, minIntervalMs: 0 });
+    const now = new Date(2026, 9, 31, 12);
+    const first = await provider.discover({ now });
+    const second = await provider.discover({ now, page: 2 });
+    expect(first).toMatchObject({ page: 1, hasMore: true, sort: "rating", cached: false, items: [{ metadata: { rating: 8.8 } }] });
+    expect(second).toMatchObject({ page: 2, hasMore: false });
+    const init = request.mock.calls[0][1];
+    expect(init.headers).not.toHaveProperty("Authorization");
+    expect(JSON.parse(String(init.body))).toMatchObject({ filters: ["and", ["or", ["lang", "=", "zh-Hans"], ["lang", "=", "zh-Hant"]],
+      ["votecount", ">=", 50], ["released", "<=", "2026-10-31"]], sort: "rating", reverse: true, results: 24, page: 1 });
+    expect(JSON.parse(String(request.mock.calls[1][1].body)).page).toBe(2);
+    expect(JSON.parse(String(init.body)).fields).toContain("sexual,violence");
+  });
+
+  it("updates the near-two-year original-release window on date changes and handles leap days", async () => {
+    const request = vi.fn<JsonFetcher>().mockResolvedValue(response(200, vndbSearchFixture));
+    const provider = new VndbProvider({ fetcher: request, minIntervalMs: 0 });
+    await provider.discover({ sort: "recent", now: new Date(2026, 9, 31, 12) });
+    await provider.discover({ sort: "recent", now: new Date(2026, 10, 1, 12) });
+    await provider.discover({ sort: "recent", now: new Date(2028, 1, 29, 12) });
+    const bodies = request.mock.calls.map(([, init]) => JSON.parse(String(init.body)));
+    expect(bodies[0]).toMatchObject({ sort: "released", reverse: true, filters: ["and", expect.anything(), ["votecount", ">=", 5], ["released", "<=", "2026-10-31"], ["released", ">=", "2024-10-31"]] });
+    expect(bodies[1].filters).toContainEqual(["released", ">=", "2024-11-01"]);
+    expect(bodies[2].filters).toContainEqual(["released", ">=", "2026-02-28"]);
+  });
+
+  it("caches a matching discovery page, refreshes on demand, and does not reuse another sort's cache", async () => {
+    const request = vi.fn<JsonFetcher>().mockResolvedValue(response(200, vndbSearchFixture));
+    const provider = new VndbProvider({ fetcher: request, minIntervalMs: 0 });
+    const now = new Date(2026, 9, 31, 12);
+    await provider.discover({ now });
+    await expect(provider.discover({ now })).resolves.toMatchObject({ cached: true });
+    expect(request).toHaveBeenCalledTimes(1);
+    await provider.discover({ now, refresh: true });
+    await provider.discover({ now, sort: "recent" });
+    expect(request).toHaveBeenCalledTimes(3);
+  });
+
+  it("uses neutral placeholders for flagged covers and rejects invalid scores instead of showing them as valid", async () => {
+    const request = fetcher(response(200, { results: [
+      { ...vndbDetailFixture, image: { ...vndbDetailFixture.image, sexual: 1, violence: 0 } },
+      { ...vndbDetailFixture, id: "v18", image: { ...vndbDetailFixture.image, sexual: 0, violence: 2 }, rating: 120 },
+      { ...vndbDetailFixture, id: "v19", image: { ...vndbDetailFixture.image, sexual: 0, violence: 0 } },
+    ], more: false }));
+    const results = await new VndbProvider({ fetcher: request, minIntervalMs: 0 }).discover();
+    expect(results.items[0].coverUrl).toBeUndefined();
+    expect(results.items[1].coverUrl).toBeUndefined();
+    expect(results.items[1].metadata.rating).toBeNull();
+    expect(results.items[2].coverUrl).toBe(vndbDetailFixture.image.url);
+  });
+
+  it("rejects invalid discovery inputs before networking and exposes an upstream failure for a useful retry", async () => {
+    const request = fetcher(response(503, {}));
+    const provider = new VndbProvider({ fetcher: request, minIntervalMs: 0, maxRetries: 0 });
+    await expect(provider.discover({ page: -1 })).rejects.toMatchObject({ code: "bad_request" });
+    await expect(provider.discover({ now: new Date("invalid") })).rejects.toMatchObject({ code: "bad_request" });
+    expect(request).not.toHaveBeenCalled();
+    await expect(provider.discover()).rejects.toMatchObject({ code: "server_error" });
   });
 });

@@ -21,6 +21,7 @@ export interface SourceUsage {
 }
 
 const capabilities: Record<string, SourceCapability> = {
+  vndb_release: { label: "VNDB 官方发行", supportedTypes: ["visual_novel"], mode: "index", setup: "none", requiresDesktop: false, description: "从 VNDB 实时读取官方发行记录，优先展示中文版本、免费版和试玩。打开游戏官网或商店下载；试玩、完整版本与补丁分别标注，购买与地区条件以原站为准。" },
   public_video: { label: "公开投稿", supportedTypes: ["anime"], mode: "direct", setup: "python", requiresDesktop: true, description: "公开投稿可能是解说、片段或合集，先核对上传者、时长与集数。选择匿名可读取的实际画质，最高1080p；标题中的4K不代表下载画质。" },
   rss: { label: "RSS / Atom", supportedTypes: ["anime", "manga", "novel", "visual_novel"], mode: "torrent", setup: "none", requiresDesktop: true, description: "检索公开更新，确认作品与集数后下载；磁力/种子由内置 aria2 或可选 qBittorrent 处理，是否可完成取决于资源节点。" },
   mangadex: { label: "MangaDex", supportedTypes: ["manga"], mode: "manga", setup: "none", requiresDesktop: true, description: "多语漫画备用来源，保留原始章节页图。检索到原作不代表该语言有章节，请核对原作、同人和可下章节。" },
@@ -73,7 +74,7 @@ export function getSourcePriority(config: SourceConfig, mediaType?: MediaType): 
   if (!getSourceCapability(config).supportedTypes.length || mediaType && !sourceSupportsType(config, mediaType)) return 1000;
   const feed = rssKind(config);
   if (feed) return feed === "mikan" ? 10 : feed === "acgnx" ? 20 : feed === "anime" ? 30 : 40;
-  const priorities: Record<string, number> = { mangabz: 10, copymanga: 20, lnovel: 10, kungal: 50, mangadex: 60, public_video: 70, archive: 80, jmcomic: 90, github_release: 300 };
+  const priorities: Record<string, number> = { mangabz: 10, copymanga: 20, lnovel: 10, kungal: 10, vndb_release: 20, mangadex: 60, public_video: 70, archive: 80, jmcomic: 90, github_release: 300 };
   return priorities[config.type] ?? 1000;
 }
 
@@ -94,6 +95,7 @@ export function getSourceUsage(config: SourceConfig): SourceUsage {
     case "public_video": return { ...common, tier: "backup", label: "公开投稿备用", format: "公开投稿 · MP4", language: "语言依投稿而异" };
     case "archive": return { ...common, tier: "backup", label: "公开档案备用", format: "档案文件直链", language: "多语 · 格式依附件而异" };
     case "kungal": return { ...common, tier: "index", label: "Galgame索引", format: "站外资源索引", language: "中文社区 · 外链需核对" };
+    case "vndb_release": return { ...common, tier: "index", label: "官方发行", format: "官网 / 商店入口", language: "中文优先 · 原版 / 试玩 / 补丁" };
     case "jmcomic": return { ...common, tier: "optional", label: "可选本地桥接", format: "章节图片 · CBZ", language: "依原站章节而异" };
     case "github_release": return { ...common, tier: "optional", label: "项目附件", format: "Release文件直链", language: "依项目附件而异" };
     default: return { ...common, tier: "unsupported", label: "待确认类型", format: "未接入适配器", language: "未确定" };

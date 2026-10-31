@@ -11,6 +11,7 @@ import { useSearchSessionStore } from "@/stores/search-session";
 import type { Media, MediaType } from "@/domain/media";
 import { isTauriRuntime } from "@/shared/runtime";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { DEFAULT_RESOURCE_SOURCE_CONFIGS } from "@/infrastructure/sources/default-sources";
 
 const route = useRoute();
 const router = useRouter();
@@ -32,7 +33,8 @@ const types: Array<{ value: MediaType; label: string }> = [
   { value: "anime", label: "动画" }, { value: "manga", label: "漫画" },
   { value: "novel", label: "小说" }, { value: "visual_novel", label: "Galgame" },
 ];
-const compatibleSources = computed(() => sources.configs.filter((config) => sourceSupportsType(config, type.value))
+const compatibleSources = computed(() => [...sources.configs, ...DEFAULT_RESOURCE_SOURCE_CONFIGS.filter((preset) =>
+  preset.type === "vndb_release" && !sources.configs.some((config) => config.id === preset.id || config.type === preset.type))].filter((config) => sourceSupportsType(config, type.value))
   .sort((left, right) => Number(right.enabled) - Number(left.enabled) || getSourcePriority(left, type.value) - getSourcePriority(right, type.value)));
 const selectedSource = computed(() => compatibleSources.value.find((source) => source.id === selectedSourceId.value));
 const publicSearchUrl = computed(() => `https://search.bilibili.com/all?keyword=${encodeURIComponent(keyword.value.trim())}`);

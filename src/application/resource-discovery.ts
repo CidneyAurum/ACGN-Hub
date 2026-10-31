@@ -116,12 +116,14 @@ export async function discoverResources(input: ResourceDiscoveryInput, factory: 
       try {
         const resources = await choice.provider.listResources(choice.candidate.sourceItemId);
         for (const resource of resources.slice(0, isFeed ? 2 : 2000)) {
-          const labels = resourceTitleLabels(resource.title, input.media?.title ?? input.keyword, expectedEpisodeCount(input.media));
+          const labels = input.mediaType === "anime" ? resourceTitleLabels(resource.title, input.media?.title ?? input.keyword, expectedEpisodeCount(input.media)) : { warnings: [] };
           const warnings = getResourceWarnings(resource, choice.warnings, labels.warnings);
           items.push({ config: choice.config, provider: choice.provider, sourceItemTitle: choice.candidate.title,
             score: choice.score, warnings, resource: withMatchMetadata(resource, choice.candidate.title, warnings, choice.score, labels) });
         }
-        if (!resources.length && !isFeed) failures.push({ config: choice.config, message: `「${choice.candidate.title}」当前没有可下载章节，请选择其它来源或作品。` });
+        if (!resources.length && !isFeed) failures.push({ config: choice.config, message: input.mediaType === "visual_novel"
+          ? `「${choice.candidate.title}」当前未找到发行或资源入口，请选择其它来源或版本。`
+          : `「${choice.candidate.title}」当前没有可下载章节，请选择其它来源或作品。` });
       } catch (cause) { failures.push({ config: choice.config, message: errorText(cause) }); }
     }
   }));
@@ -136,7 +138,7 @@ export async function discoverResources(input: ResourceDiscoveryInput, factory: 
 
 /** A selected source work survives reload without another broad title search. */
 export async function loadSourceItemResources(input: {
-  config: SourceConfig; sourceItemId: string; title: string;
+  config: SourceConfig; sourceItemId: string; title: string; mediaType?: MediaType;
 }, factory: ProviderFactory = createSourceProvider): Promise<{ provider: SourceProvider; resources: ResourceItem[]; warnings: string[] }> {
   const provider = factory(input.config);
   let resources = await provider.listResources(input.sourceItemId);
@@ -145,9 +147,11 @@ export async function loadSourceItemResources(input: {
     if (candidates.some((candidate) => candidate.sourceItemId === input.sourceItemId)) resources = await provider.listResources(input.sourceItemId);
   }
   const warnings: string[] = [];
-  if (!resources.length) warnings.push("当前作品没有可下载章节或附件。可换用其它来源，或检查该作品是否只提供站外阅读。");
+  if (!resources.length) warnings.push(provider.supportedTypes.includes("visual_novel")
+    ? "当前作品未找到发行或资源入口。可换用其它来源，或打开官网确认发行状态。"
+    : "当前作品没有可下载章节或附件。可换用其它来源，或检查该作品是否只提供站外阅读。");
   return { provider, warnings, resources: resources.map((resource) => {
-    const labels = resourceTitleLabels(resource.title, input.title);
+    const labels = (input.mediaType ?? provider.supportedTypes[0]) === "anime" ? resourceTitleLabels(resource.title, input.title) : { warnings: [] };
     return withMatchMetadata(resource, input.title, labels.warnings, 100, labels);
   }) };
 }

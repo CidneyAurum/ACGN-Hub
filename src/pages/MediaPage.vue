@@ -88,7 +88,8 @@ const metadataEntries = computed(() =>
 );
 const resourceSourceOptions = computed(() => {
   const existingIds = new Set(sourceStore.configs.map((config) => config.id));
-  const configs = [...sourceStore.configs, ...DEFAULT_RESOURCE_SOURCE_CONFIGS.filter((config) => !existingIds.has(config.id))];
+  const configs = [...sourceStore.configs, ...DEFAULT_RESOURCE_SOURCE_CONFIGS.filter((config) => !existingIds.has(config.id) &&
+    !sourceStore.configs.some((saved) => saved.type === config.type && saved.url.replace(/\/+$/, "") === config.url.replace(/\/+$/, "")))];
   return configs.filter((config) => sourceSupportsType(config, media.value?.type ?? "anime") &&
     (!exactSource.value || config.id === media.value?.metadata.sourceConfigId))
     .sort((left, right) => getSourcePriority(left, media.value?.type) - getSourcePriority(right, media.value?.type))
@@ -109,12 +110,16 @@ const visibleResources = computed(() => {
       resource.language,
       resource.resolution,
       resource.protocol,
+      resource.metadata.resourceTypeLabel,
+      typeof resource.metadata.searchTerms === "string" ? resource.metadata.searchTerms : undefined,
+      ...(Array.isArray(resource.metadata.searchTerms) ? resource.metadata.searchTerms.filter((value): value is string => typeof value === "string") : []),
+      ...(Array.isArray(resource.metadata.platformLabels) ? resource.metadata.platformLabels.filter((value): value is string => typeof value === "string") : []),
     ].filter(Boolean).join(" ").toLocaleLowerCase();
     return searchable.includes(query);
   }).sort((left, right) => resourceLanguageScore(right) - resourceLanguageScore(left));
 });
 const allVisibleSelected = computed(() =>
-  visibleResources.value.length > 0 && visibleResources.value.every((resource) => selectedResourceIds.value.includes(resource.id)),
+  visibleResources.value.some((resource) => resource.metadata.downloadMode !== "external_link") && visibleResources.value.filter((resource) => resource.metadata.downloadMode !== "external_link").every((resource) => selectedResourceIds.value.includes(resource.id)),
 );
 onMounted(() => void load());
 watch(() => route.params.id, () => void load());
@@ -294,7 +299,7 @@ async function loadResources(targetMedia: Media): Promise<void> {
     if (exactSource.value) {
       const config = configs.find((item) => item.id === targetMedia.metadata.sourceConfigId);
       if (!config) throw new Error("这个作品的来源未启用，请在下方启用原来源后重试。");
-      const result = await loadSourceItemResources({ config, sourceItemId: String(targetMedia.metadata.sourceItemId), title: targetMedia.title });
+      const result = await loadSourceItemResources({ config, sourceItemId: String(targetMedia.metadata.sourceItemId), title: targetMedia.title, mediaType: targetMedia.type });
       found = result.resources.map((resource) => ({ resource, config, provider: result.provider, sourceItemTitle: targetMedia.title, warnings: getResourceWarnings(resource, result.warnings) }));
     } else {
       const keyword = sourceSearchKeyword.value.trim() || targetMedia.title;
@@ -568,13 +573,14 @@ async function addManualResource(): Promise<void> {
 }
 
 function toggleResource(resourceId: string): void {
+  if (resources.value.find((resource) => resource.id === resourceId)?.metadata.downloadMode === "external_link") return;
   selectedResourceIds.value = selectedResourceIds.value.includes(resourceId)
     ? selectedResourceIds.value.filter((id) => id !== resourceId)
     : [...selectedResourceIds.value, resourceId];
 }
 
 function toggleAllVisible(): void {
-  const visibleIds = visibleResources.value.map((resource) => resource.id);
+  const visibleIds = visibleResources.value.filter((resource) => resource.metadata.downloadMode !== "external_link").map((resource) => resource.id);
   selectedResourceIds.value = allVisibleSelected.value
     ? selectedResourceIds.value.filter((id) => !visibleIds.includes(id))
     : [...new Set([...selectedResourceIds.value, ...visibleIds])];
@@ -583,7 +589,7 @@ function toggleAllVisible(): void {
 async function addSelectedResources(): Promise<void> {
   if (addingResourceId.value || batchAdding.value) return;
   const generation = loadGeneration;
-  const selected = visibleResources.value.filter((resource) => selectedResourceIds.value.includes(resource.id));
+  const selected = visibleResources.value.filter((resource) => resource.metadata.downloadMode !== "external_link" && selectedResourceIds.value.includes(resource.id));
   if (!selected.length) return;
   batchAdding.value = true;
   let failed = 0;

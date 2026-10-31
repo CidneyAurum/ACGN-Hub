@@ -61,14 +61,14 @@ export function sourceTitleMatch(title: string, terms: string[], aliases: string
 }
 
 export function sourceCandidateAliases(candidate: SourceSearchResult): string[] {
+  const names = (candidate.aliases ?? []).filter((value): value is string => typeof value === "string");
   const raw = candidate.raw;
-  if (!raw) return [];
-  const names: string[] = [];
+  if (!raw) return names;
   if (typeof raw.alias === "string") names.push(...raw.alias.split(/[,，;；\n]/u));
   const attributes = raw.attributes as { title?: Record<string, unknown>; altTitles?: Record<string, unknown>[] } | undefined;
   if (attributes?.title) names.push(...Object.values(attributes.title).filter((value): value is string => typeof value === "string"));
   for (const values of attributes?.altTitles ?? []) names.push(...Object.values(values).filter((value): value is string => typeof value === "string"));
-  return names;
+  return [...new Set(names)];
 }
 
 export function rankSourceCandidates(candidates: SourceSearchResult[], keyword: string, aliases: string[] = [], limit = 12) {
