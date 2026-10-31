@@ -14,6 +14,7 @@ const cookie = ref("");
 const running = ref(false);
 const error = ref("");
 const result = ref("");
+const completedTaskId = ref("");
 const localDownloadStore = useLocalDownloadStore();
 
 const imageUrls = computed(() => [...new Set(imageText.value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean))]);
@@ -21,6 +22,7 @@ const imageUrls = computed(() => [...new Set(imageText.value.split(/\r?\n/).map(
 async function packageChapter(): Promise<void> {
   error.value = "";
   result.value = "";
+  completedTaskId.value = "";
   if (!isTauriRuntime()) {
     error.value = "漫画章节下载和 CBZ 打包只在桌面端可用";
     return;
@@ -54,6 +56,7 @@ async function packageChapter(): Promise<void> {
       sourceName: "手动漫画章节",
       directory: outputRoot,
       outputPath,
+      reading: { seriesTitle: cleanTitle, unitTitle: cleanChapter },
       cleanupPaths: [{ path: tempDirectory, allowedRoot: settings.incomingDirectory }],
       totalUnits: imageUrls.value.length,
     });
@@ -78,6 +81,7 @@ async function packageChapter(): Promise<void> {
       return;
     }
     result.value = `已下载 ${packaged.pageCount} 页 CBZ 到 Obsidian 电子书目录：${packaged.outputPath}`;
+    completedTaskId.value = localTaskId!;
     cookie.value = "";
     referer.value = "";
   } catch (cause) {
@@ -117,6 +121,7 @@ function isAbsoluteWindowsPath(value: string): boolean {
     </form>
     <p v-if="error" class="error-message">{{ error }}</p>
     <p v-if="result" class="success-message">{{ result }}</p>
+    <RouterLink v-if="completedTaskId && localDownloadStore.ownedOutputPath(completedTaskId)" class="primary-button" :to="'/viewer/local/' + encodeURIComponent(completedTaskId)">立即阅读</RouterLink>
     <p class="hint">单页上限 50 MB，章节总上限 500 MB；成功后清理临时图片。已有同名文件不会覆盖，可在下载中心查看进度或请求取消。</p>
   </section>
 </template>

@@ -21,6 +21,19 @@ describe("local download ownership and cancellation", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
+  it("persists series identity with generated chapters and restores it without altering older history", async () => {
+    const store = useLocalDownloadStore();
+    const reading = { mediaId: "source:copy:edition-new", seriesTitle: "安達與島村", unitTitle: "第60話", unitNumber: 60 };
+    const id = store.create({ ...input, reading });
+    await store.complete(id);
+    setActivePinia(createPinia());
+    const restored = useLocalDownloadStore();
+    restored.initialize();
+    expect(restored.tasks.find((task) => task.id === id)?.reading).toEqual(reading);
+    expect(restored.ownedOutputPath(id)).toBe(input.outputPath);
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
   it.each(["broken JSON", "{}", '[{"id":"bad","outputPath":"C:\\\\Books\\\\bad.cbz"}]'])
     ("preserves malformed storage and visibly blocks later writes: %s", (raw) => {
       localStorage.setItem("acgn-hub.local-download-tasks.v1", raw);

@@ -65,6 +65,7 @@ export const useLocalDownloadStore = defineStore("local-downloads", () => {
     outputPath: string;
     cleanupPaths?: Array<{ path: string; allowedRoot: string }>;
     totalUnits?: number;
+    reading?: LocalDownloadTask["reading"];
   }): string {
     initialize();
     assertWritable();
@@ -82,6 +83,7 @@ export const useLocalDownloadStore = defineStore("local-downloads", () => {
       sourceName: input.sourceName,
       directory: input.directory,
       outputPath: input.outputPath,
+      ...(input.reading ? { reading: { ...input.reading } } : {}),
       ...(input.cleanupPaths?.length ? { cleanupPaths: input.cleanupPaths.filter((item) => pathKey(item.path) !== outputKey) } : {}),
       stage: "preparing",
       completedUnits: 0,
@@ -326,5 +328,9 @@ function isLocalDownloadTask(value: unknown): value is LocalDownloadTask {
     ["preparing", "downloading", "packaging", "completed", "failed", "cancelled"].includes(task.stage ?? "") &&
     [task.completedUnits, task.totalUnits].every((item) => typeof item === "number" && Number.isFinite(item) && item >= 0) &&
     [task.detail, task.error].every((item) => item === undefined || typeof item === "string") &&
+    (task.reading === undefined || (task.reading && typeof task.reading === "object" && !Array.isArray(task.reading)
+      && typeof task.reading.seriesTitle === "string" && task.reading.seriesTitle.trim().length > 0
+      && [task.reading.mediaId, task.reading.editionId, task.reading.unitTitle].every((item) => item === undefined || typeof item === "string")
+      && (task.reading.unitNumber === undefined || (typeof task.reading.unitNumber === "number" && Number.isFinite(task.reading.unitNumber) && task.reading.unitNumber >= 0)))) &&
     (task.cleanupPaths === undefined || (Array.isArray(task.cleanupPaths) && task.cleanupPaths.every((item) => item && typeof item.path === "string" && typeof item.allowedRoot === "string" && item.path.length > 0 && item.allowedRoot.length > 0)));
 }

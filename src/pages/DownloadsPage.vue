@@ -10,6 +10,8 @@ import { isTauriRuntime } from "@/shared/runtime";
 import { useLocalDownloadStore } from "@/stores/local-download";
 import { useRouter } from "vue-router";
 import { parsePublicVideoInput } from "@/infrastructure/sources/public-video-source-provider";
+import { getLocalViewerKind } from "@/domain/local-viewer";
+import { buildViewerSeries, type ViewerSeries } from "@/domain/viewer-series";
 
 const store = useDownloadStore();
 const localStore = useLocalDownloadStore();
@@ -29,6 +31,24 @@ function configuredOutputRoots(): string[] {
   return [settings.libraryDirectory, settings.incomingDirectory, settings.downloadDirectory].filter(Boolean);
 }
 const outputChoices = computed(() => Object.fromEntries(store.tasks.map((task) => [task.id, getCompletedDownloadOutputs(task, configuredOutputRoots())])));
+const completedSeries = computed(() => {
+  const groups: ViewerSeries[] = [];
+  const seen = new Set<string>();
+  const options = { localTasks: localStore.tasks, engineTasks: store.tasks,
+    ownedLocalOutput: (id: string) => localStore.ownedOutputPath(id), configuredRoots: configuredOutputRoots() };
+  const entries = [
+    ...localStore.tasks.filter((task) => task.stage === "completed").map((task) => ({ collection: "local" as const, id: task.id })),
+    ...store.tasks.flatMap((task) => getCompletedDownloadOutputs(task, options.configuredRoots).map((output) => ({ collection: "engine" as const, id: task.id, file: output.path }))),
+  ];
+  for (const current of entries) {
+    const group = buildViewerSeries({ ...options, current });
+    if (!group.items.length) continue;
+    const key = group.items.map((item) => JSON.stringify([item.collection, item.id, item.path])).sort().join("|");
+    if (seen.has(key)) continue;
+    seen.add(key); groups.push(group);
+  }
+  return groups;
+});
 const recoveryMessage = ref("");
 const taskFilter = ref("all");
 const taskQuery = ref("");
@@ -213,6 +233,27 @@ async function openTaskOutput(task: DownloadTask): Promise<void> {
   });
 }
 
+function viewerLabel(path?: string): string {
+  const kind = getLocalViewerKind(path ?? "");
+  return kind === "comic" ? "阅读漫画" : kind === "text" ? "阅读小说" : "应用内播放";
+}
+
+async function viewTaskOutput(task: DownloadTask): Promise<void> {
+  const current = store.tasks.find((item) => item.id === task.id);
+  if (!current || taskBusy(current) || !isTauriRuntime()) return;
+  const choices = getCompletedDownloadOutputs(current, configuredOutputRoots());
+  const output = choices.length === 1 ? choices[0] : choices.find((item) => item.path === outputSelections.value[current.id]);
+  if (!output || !getLocalViewerKind(output.path)) { formError.value = "先选择可在应用内观看的视频、CBZ 或 TXT 文件。"; return; }
+  await router.push({ path: `/viewer/engine/${encodeURIComponent(current.id)}`, query: { file: output.path } });
+}
+
+async function viewLocalOutput(task: LocalDownloadTask): Promise<void> {
+  const ownedPath = localStore.ownedOutputPath(task.id);
+  if (pendingTaskActions.value.has(task.id) || !isTauriRuntime()) return;
+  if (!ownedPath || !getLocalViewerKind(ownedPath)) { formError.value = "当前任务没有可读取的成品文件，请核对输出目录。"; return; }
+  await router.push(`/viewer/local/${encodeURIComponent(task.id)}`);
+}
+
 function fileName(path: string): string { return path.split(/[\\/]/).pop() ?? path; }
 function fileExtension(path: string): string { return fileName(path).match(/\.[A-Za-z0-9]{1,8}$/)?.[0] ?? ""; }
 
@@ -349,6 +390,14 @@ function rebuildLocalRecords(): void {
     </div>
     <RouterLink class="ghost-button" to="/settings">引擎与保存位置</RouterLink>
   </section>
+  <section v-if="completedSeries.length" class="download-series-library" aria-label="按作品观看">
+    <div class="card-heading"><div><h3>按作品观看</h3><p class="muted">已完成的话、集和卷放在一起，进入后可按顺序接续。</p></div></div>
+    <div class="download-series-grid"><article v-for="group in completedSeries" :key="group.items[0].route.path + group.items[0].path" class="download-series-card">
+      <span>{{ group.items[0].kind === 'comic' ? '漫画' : group.items[0].kind === 'text' ? '轻小说' : '动画 / 视频' }}</span><h4>{{ group.title }}</h4><p>{{ group.items.length }} {{ group.items[0].kind === 'text' ? '卷' : '话 / 集' }}已下载</p>
+      <RouterLink class="small-button primary-button" :to="group.items[0].route">{{ group.items[0].kind === 'video' ? '开始播放' : '开始阅读' }}</RouterLink>
+      <details v-if="group.items.length > 1"><summary>已下载目录</summary><RouterLink v-for="item in group.items" :key="item.id + item.path" :to="item.route">{{ item.unitTitle || item.title }}</RouterLink></details>
+    </article></div>
+  </section>
 
   <section v-if="localStore.error" class="card" role="alert"><p class="error-message">{{ localStore.error }}</p><div class="form-footer"><button class="ghost-button" type="button" @click="exportLocalRecords">导出原始记录</button><button v-if="localStore.persistencePending" class="ghost-button" :disabled="pendingTaskActions.has('local-persistence')" type="button" @click="retryLocalPersistence">{{ pendingTaskActions.has('local-persistence') ? '保存中…' : '重试保存记录' }}</button><button class="ghost-button" :disabled="localStore.persistencePending || pendingTaskActions.has('local-persistence')" type="button" @click="rebuildLocalRecords">备份并重建记录</button></div><p class="hint">{{ localStore.persistencePending ? '先保存或导出本次窗口中的记录，再关闭应用。已生成的文件不会删除。' : '只处理任务记录；已有 MP4、TXT、CBZ 和下载文件不会被删除。' }}</p></section>
   <p v-if="recoveryMessage" class="success-message" role="status">{{ recoveryMessage }}</p>
@@ -442,6 +491,7 @@ function rebuildLocalRecords(): void {
         <div class="task-actions">
           <template v-if="outputChoices[task.id]?.length">
             <label v-if="outputChoices[task.id].length > 1" class="completed-output-choice"><span>选择打开文件</span><select v-model="outputSelections[task.id]" :disabled="taskBusy(task)"><option value="">先选择一个文件</option><option v-for="output in outputChoices[task.id]" :key="output.path" :value="output.path">{{ output.label }}</option></select></label>
+            <button v-if="outputChoices[task.id].some(output => getLocalViewerKind(output.path))" class="small-button primary-button" :disabled="!isTauriRuntime() || taskBusy(task) || !getLocalViewerKind(selectedOutput(task)?.path ?? '')" type="button" @click="viewTaskOutput(task)">{{ viewerLabel(selectedOutput(task)?.path) }}</button>
             <button class="small-button" :disabled="!isTauriRuntime() || taskBusy(task) || !selectedOutput(task)" :title="selectedOutput(task)?.path || '先选择需要打开的文件'" type="button" @click="openTaskOutput(task)">打开文件</button>
           </template>
           <button v-if="task.state === 'completed' && task.engineId === 'aria2' && task.files.length" class="small-button" :disabled="taskBusy(task) || !!store.namingRecoveryMessage" type="button" @click="openNameEditor(task)">{{ task.naming?.status === 'renamed' ? '修改名称' : '自动命名' }}</button>
@@ -466,7 +516,7 @@ function rebuildLocalRecords(): void {
       <div class="card-heading local-download-heading">
         <div>
           <h3>视频与书籍</h3>
-          <p class="muted">下载结束后，可以直接打开 MP4、CBZ 或 TXT 文件。</p>
+          <p class="muted">下载结束后，在应用内阅读漫画、小说或播放视频，也可使用系统程序打开。</p>
         </div>
       </div>
       <div class="task-list">
@@ -487,6 +537,7 @@ function rebuildLocalRecords(): void {
             <p v-if="task.stage === 'completed' && !localStore.ownedOutputPath(task.id)" class="hint">此记录的文件归属已变化，或路径正在处理。请核对输出目录，并从当前任务打开成品。</p>
           </div>
           <div class="task-actions">
+            <button v-if="task.stage === 'completed' && isTauriRuntime() && getLocalViewerKind(task.outputPath)" class="small-button primary-button" :disabled="!localStore.ownedOutputPath(task.id) || pendingTaskActions.has(task.id)" type="button" @click="viewLocalOutput(task)">{{ viewerLabel(task.outputPath) }}</button>
             <button v-if="task.stage === 'completed' && isTauriRuntime()" class="small-button" :disabled="!localStore.ownedOutputPath(task.id) || pendingTaskActions.has(task.id)" type="button" @click="openCompletedFile(task)">打开文件</button>
             <button class="small-button" type="button" @click="openPath(task.directory, '输出目录')">输出目录</button>
             <button v-if="['preparing', 'downloading', 'packaging'].includes(task.stage)" class="small-button danger" :disabled="pendingTaskActions.has(task.id)" type="button" @click="taskAction(task.id, () => localStore.cancel(task.id))">取消</button>
@@ -505,4 +556,5 @@ function rebuildLocalRecords(): void {
 <style scoped>
 .task-phase-detail{margin:8px 0 0;line-height:1.7}.state-pill.status-warning{color:#af586c;background:#fff0f3}.task-download-details{font-size:11px;color:#9c86ad;margin-top:9px}.task-download-details summary{cursor:pointer}.task-download-details code{display:block;overflow-wrap:anywhere;margin-top:7px;font-size:10px}.task-actions>a{text-decoration:none;display:inline-flex;align-items:center}.completed-name-editor{padding:14px;margin-top:12px;border:1px solid #e7dbee;border-radius:9px;background:#fff}.completed-name-editor label{display:grid;gap:7px;font-size:11px;color:#806a91}.completed-name-editor input,.completed-name-editor select{width:100%;box-sizing:border-box;font-size:12px}.completed-name-editor .task-actions{justify-content:flex-start;margin-top:10px}.naming-history p{font-size:10px;overflow-wrap:anywhere}
 .completed-output-choice{display:grid;gap:4px;max-width:270px;font-size:11px;color:#806a91}.completed-output-choice select{min-width:0;max-width:100%;font-size:12px}
+.download-series-library{margin:0 0 26px}.download-series-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}.download-series-card{padding:20px;border:1px solid #e9dff0;border-radius:13px;background:linear-gradient(140deg,#fff,#f8f4fc)}.download-series-card>span{font-size:10px;color:#ab92be}.download-series-card h4{font-size:16px;line-height:1.6;color:#715583;margin:8px 0;overflow-wrap:anywhere}.download-series-card p{font-size:11px;color:#b09bbd;margin:0 0 15px}.download-series-card>a{display:inline-flex;text-decoration:none}.download-series-card details{font-size:11px;color:#9b81af;margin-top:14px}.download-series-card summary{cursor:pointer}.download-series-card details a{display:block;padding:8px 0;color:#85639b;text-decoration:none;border-bottom:1px solid #eee5f3;overflow-wrap:anywhere}
 </style>

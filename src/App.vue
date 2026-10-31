@@ -29,8 +29,8 @@ const toolNav = [
   { path: "/games", label: "Galgame 工具", icon: "games" },
 ];
 const activeCount = computed(() => downloads.tasks.filter((task) => ["queued", "downloading"].includes(task.state)).length);
-const pageTitle = computed(() => route.path.startsWith("/media/") ? "作品详情" : route.path === "/search" ? "搜索" : route.path === "/settings" ? "设置" : [...mainNav, ...toolNav].find((item) => item.path === route.path)?.label ?? "发现");
-const navPath = computed(() => route.path === "/search" || route.path.startsWith("/media/") ? "/" : route.path);
+const pageTitle = computed(() => route.path.startsWith("/viewer/") ? "本地阅读与播放" : route.path.startsWith("/media/") ? "作品详情" : route.path === "/search" ? "搜索" : route.path === "/settings" ? "设置" : [...mainNav, ...toolNav].find((item) => item.path === route.path)?.label ?? "发现");
+const navPath = computed(() => route.path.startsWith("/viewer/") ? "/downloads" : route.path === "/search" || route.path.startsWith("/media/") ? "/" : route.path);
 const toolsOpen = ref(false);
 watch(() => route.fullPath, () => { pageError.value = ""; if (toolNav.some((item) => item.path === route.path)) toolsOpen.value = true; });
 onErrorCaptured((error) => { pageError.value = error instanceof Error ? error.message : "页面没有正确加载，请重试"; return false; });
@@ -74,7 +74,7 @@ onUnmounted(() => { stopped = true; if (timer) clearTimeout(timer); window.remov
       <div class="anime-nav-separator"></div>
       <button class="anime-tools-toggle" :aria-expanded="toolsOpen" @click="toolsOpen = !toolsOpen"><span>更多工具</span><span>{{ toolsOpen ? '⌃' : '⌄' }}</span></button>
       <nav v-if="toolsOpen" class="anime-tool-nav" aria-label="更多工具"><RouterLink v-for="item in toolNav" :key="item.path" :to="item.path" :class="{ active: route.path === item.path }"><AppIcon :name="item.icon" :size="16" /><span>{{ item.label }}</span></RouterLink></nav>
-      <div class="anime-sidebar-bottom"><div v-if="activeCount" class="sidebar-download-status"><span class="pulse-dot"></span><RouterLink to="/downloads">{{ activeCount }} 个活动任务</RouterLink></div><RouterLink to="/settings" class="anime-settings-link" :class="{ active: route.path === '/settings' }"><AppIcon name="settings" :size="19" /><span>设置</span><small>0.3.5</small></RouterLink><p>我的收藏 · 我的设备</p></div>
+      <div class="anime-sidebar-bottom"><div v-if="activeCount" class="sidebar-download-status"><span class="pulse-dot"></span><RouterLink to="/downloads">{{ activeCount }} 个活动任务</RouterLink></div><RouterLink to="/settings" class="anime-settings-link" :class="{ active: route.path === '/settings' }"><AppIcon name="settings" :size="19" /><span>设置</span><small>0.3.6</small></RouterLink><p>我的收藏 · 我的设备</p></div>
     </aside>
     <div class="anime-main">
       <header class="anime-topbar"><div class="anime-topbar-context"><span class="breadcrumb-home">我的空间</span><span>/</span><strong>{{ pageTitle }}</strong></div><form class="anime-global-search" @submit.prevent="search"><AppIcon name="search" :size="16" /><input v-model="globalKeyword" aria-label="全局搜索作品" placeholder="搜索番剧、漫画、轻小说…" /><kbd>↵</kbd></form><RouterLink class="anime-library-shortcut" to="/library" title="我的收藏">♡</RouterLink></header>

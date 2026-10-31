@@ -7,6 +7,29 @@ function response(body: unknown): { status: number; json: () => Promise<unknown>
 }
 
 describe("CopyMangaSourceProvider", () => {
+  it("retains same-title adaptation editions and exposes authors and actual latest chapter labels", async () => {
+    const old = { name: "安達與島村", path_word: "andayudaocun", author: [{ name: "入间人间" }, { name: "まに" }] };
+    const newer = { name: "安達與島村", path_word: "andayudaocunnew", author: [{ name: "入间人间" }, { name: "柚原もけ" }] };
+    const fetcher: JsonFetcher = async (url) => {
+      if (url.includes("/search/comic")) return response({ code: 200, results: { list: [old, newer] } });
+      if (url.includes("/comic2/")) return response({ code: 200, results: { comic: newer, groups: { default: { path_word: "default" }, tankobon: { path_word: "tankobon" } } } });
+      if (url.includes("/group/tankobon/")) return response({ code: 200, results: { total: 1, list: [{ uuid: "volume-1", name: "第1卷", index: 0 }] } });
+      return response({ code: 200, results: { total: 3, list: [
+        { uuid: "chapter-1", name: "第01话", index: 0 }, { uuid: "chapter-60", name: "第60话", index: 67 }, { uuid: "extra", name: "番外篇2", index: 68 },
+      ] } });
+    };
+    const provider = new CopyMangaSourceProvider("https://configured.example", { fetcher });
+    const candidates = await provider.search({ keyword: "安达与岛村", aliases: [], mediaType: "manga" });
+    expect(candidates.map((item) => item.sourceItemId)).toEqual(["andayudaocun", "andayudaocunnew"]);
+    expect(candidates[0].raw).toMatchObject({ authors: ["入间人间", "まに"], editionLabel: "入间人间 / まに版" });
+    expect(candidates[1].raw).toMatchObject({ authors: ["入间人间", "柚原もけ"], editionLabel: "入间人间 / 柚原もけ版" });
+    const resources = await provider.listResources("andayudaocunnew");
+    expect(resources).toHaveLength(4);
+    expect(resources[1].chapter).toBe(60);
+    expect(resources[2].chapter).toBeUndefined();
+    expect(resources[0].metadata).toMatchObject({ authors: ["入间人间", "柚原もけ"], editionLabel: "入间人间 / 柚原もけ版", latestChapter: "第60话", chapterCount: 4 });
+    expect(resources.at(-1)?.metadata).toMatchObject({ chapterCount: 4, groupWord: "tankobon" });
+  });
   it("restores the saved comic and chapter metadata for CBZ generation", async () => {
     const provider = new CopyMangaSourceProvider("https://configured.example", { fetcher: async () => response({ code: 200, results: { chapter: { contents: [{ url: "https://images.example/page.jpg" }] } } }) });
     provider.restoreResource({ id: "saved", sourceId: provider.id, sourceItemId: "comic-1", title: "测试漫画", protocol: "http", targetUrl: "https://configured.example/chapter", createdAt: "2026-01-01", metadata: { provider: "拷贝漫画", pathWord: "comic-1", chapterUuid: "chapter-1", seriesTitle: "测试漫画", chapterName: "第1话", downloadMode: "manga_cbz" } });

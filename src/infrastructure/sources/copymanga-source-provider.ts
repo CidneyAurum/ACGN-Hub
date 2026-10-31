@@ -13,6 +13,7 @@ const comicSchema = z.object({
   path_word: z.string().min(1),
   cover: z.string().nullable().optional().transform((value) => value || undefined),
   ban: z.number().nullable().optional(),
+  author: z.array(z.object({ name: z.string().min(1) }).passthrough()).optional().default([]),
 }).passthrough();
 
 const searchResponseSchema = z.object({
@@ -129,17 +130,19 @@ export class CopyMangaSourceProvider implements SourceProvider {
         sourceItemId: comic.path_word,
         title: comic.name,
         ...(comic.cover ? { coverUrl: comic.cover } : {}),
-        raw: comic as unknown as Record<string, unknown>,
+        raw: { ...(comic as unknown as Record<string, unknown>), ...comicEditionMetadata(comic),
+          ...(latestComicChapter(comic) ? { latestChapter: latestComicChapter(comic) } : {}) },
       };
     });
   }
 
   async listResources(sourceItemId: string): Promise<ResourceItem[]> {
     const groups = await this.loadGroups(sourceItemId);
-    const comic = this.comics.get(sourceItemId) ?? { name: sourceItemId, path_word: sourceItemId, alias: "", cover: undefined };
+    const comic = this.comics.get(sourceItemId) ?? { name: sourceItemId, path_word: sourceItemId, alias: "", cover: undefined, author: [] };
     const result: ResourceItem[] = [];
     for (const groupWord of groups) {
       const chapters = await this.loadChapters(sourceItemId, groupWord);
+      const latestChapter = latestNumberedChapter(chapters);
       for (const chapter of chapters) {
       const detailUrl = this.chapterDetailUrl(sourceItemId, chapter.uuid);
         const resource: ResourceItem = {
@@ -149,7 +152,7 @@ export class CopyMangaSourceProvider implements SourceProvider {
           title: `${comic.name} · ${chapter.name}`,
           protocol: "http",
           targetUrl: detailUrl,
-          ...(typeof chapter.index === "number" ? { chapter: chapter.index + 1 } : {}),
+          ...(chapterNumber(chapter.name) !== undefined ? { chapter: chapterNumber(chapter.name) } : {}),
           format: "CBZ",
           metadata: {
             provider: "拷贝漫画",
@@ -159,6 +162,9 @@ export class CopyMangaSourceProvider implements SourceProvider {
             chapterUuid: chapter.uuid,
             chapterName: chapter.name,
             seriesTitle: comic.name,
+            ...comicEditionMetadata(comic),
+            chapterCount: chapters.length,
+            ...(latestChapter ? { latestChapter } : {}),
             authentication: this.authorization ? "configured" : "public_or_login",
           },
           createdAt: new Date().toISOString(),
@@ -173,6 +179,7 @@ export class CopyMangaSourceProvider implements SourceProvider {
         ? "拷贝漫画章节列表为空；该作品可能没有公开章节或当前接口节点暂时不可用"
         : "拷贝漫画搜索正常，但该作品章节接口需要登录 Token；请在来源管理中完成账号登录或粘贴 Token");
     }
+    for (const resource of result) resource.metadata.chapterCount = result.length;
     return result;
   }
 
@@ -333,5 +340,34 @@ export class CopyMangaSourceProvider implements SourceProvider {
 
 function upgradeImageUrl(value: string): string {
   return value.replace(/c800x\.(?:jpg|jpeg|webp)$/i, (match) => match.toLowerCase().endsWith("webp") ? "c1500x.webp" : "c1500x.jpg");
+}
+
+function comicEditionMetadata(comic: Comic): { authors: string[]; editionLabel: string } {
+  const authors = [...new Set(comic.author.map((item) => item.name.trim()).filter(Boolean))];
+  return { authors, editionLabel: authors.length ? authors.join(" / ") + "版" : "拷贝漫画版本 · " + comic.path_word };
+}
+
+function latestComicChapter(comic: Comic): string | undefined {
+  const raw = comic.last_chapter;
+  return raw && typeof raw === "object" && typeof (raw as Record<string, unknown>).name === "string"
+    ? ((raw as Record<string, unknown>).name as string).trim() || undefined : undefined;
+}
+
+function latestNumberedChapter(chapters: Chapter[]): string | undefined {
+  let best: { number: number; name: string } | undefined;
+  for (const chapter of chapters) {
+    const match = chapter.name.match(/^第\s*(\d+(?:\.\d+)?)\s*[话話集章]/u);
+    if (!match) continue;
+    const number = Number(match[1]);
+    if (!best || number > best.number) best = { number, name: chapter.name };
+  }
+  return best?.name;
+}
+
+function chapterNumber(value: string): number | undefined {
+  const match = value.match(/^第\s*(\d+(?:\.\d+)?)\s*[话話集章]/u);
+  if (!match) return;
+  const number = Number(match[1]);
+  return Number.isFinite(number) && number >= 0 && number <= 100_000 ? number : undefined;
 }
 

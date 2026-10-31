@@ -5,7 +5,7 @@ use std::io::Write;
 use tauri::Manager;
 use tauri_plugin_opener::OpenerExt;
 
-fn validated_media(path: &str, allowed_root: &str) -> Result<PathBuf, String> {
+pub(crate) fn validated_media(path: &str, allowed_root: &str) -> Result<PathBuf, String> {
     let root = std::fs::canonicalize(absolute_path(allowed_root, "下载文件根目录")?)
         .map_err(|error| format!("下载文件根目录不可用：{error}"))?;
     if !root.is_dir() {

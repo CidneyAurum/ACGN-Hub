@@ -62,6 +62,7 @@ const resourceLoading = ref(false);
 const resourceSearchRequested = ref(false);
 const resourceError = ref("");
 const resourceNotice = ref("");
+const completedLocalTaskId = ref("");
 const addingResourceId = ref("");
 const resourceQuery = ref("");
 const sourceSearchKeyword = ref("");
@@ -144,6 +145,7 @@ async function load(): Promise<void> {
   resourceSearchRequested.value = false;
   resourceError.value = "";
   resourceNotice.value = "";
+  completedLocalTaskId.value = "";
   resourceSourceFilter.value = "";
   manualAdding.value = false;
   batchAdding.value = false;
@@ -383,7 +385,8 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
       const title = sanitizeFileName(resource.title || targetMedia.title).slice(0, 150);
       const quality = resource.resolution?.match(/^\d{3,4}p$/i)?.[0];
       const outputPath = joinWindowsPath(outputRoot, "Anime", sanitizeFileName(targetMedia.title).slice(0, 120), title + (quality ? ` - ${quality}` : "") + ".mp4");
-      localTaskId = localDownloadStore.create({ kind: "video", title: resource.title + (quality ? ` · ${quality}` : ""), sourceName: sourceConfig?.name ?? "公开投稿", directory: outputRoot, outputPath, totalUnits: 100 });
+      localTaskId = localDownloadStore.create({ kind: "video", title: resource.title + (quality ? ` · ${quality}` : ""), sourceName: sourceConfig?.name ?? "公开投稿", directory: outputRoot, outputPath, totalUnits: 100,
+        reading: { mediaId: targetMedia.id, seriesTitle: targetMedia.title, unitTitle: resource.title, ...(resource.episode !== undefined ? { unitNumber: resource.episode } : {}) } });
       await downloadPublicVideo({
         url: resource.targetUrl, outputRoot, outputPath, operationId: localTaskId,
         isCancelled: () => localDownloadStore.isCancelled(localTaskId!),
@@ -394,7 +397,7 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
         }),
       });
       if (!await localDownloadStore.complete(localTaskId, outputPath)) return false;
-      if (generation === loadGeneration) resourceNotice.value = `视频已下载：${outputPath}`;
+      if (generation === loadGeneration) { resourceNotice.value = `视频已下载：${outputPath}`; completedLocalTaskId.value = localTaskId; }
       return true;
     }
     if (provider?.downloadNovel && isNovelResource(resource)) {
@@ -416,6 +419,7 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
         directory: settings.obsidianEbookDirectory,
         outputPath,
         totalUnits: descriptor.chapterCount,
+        reading: { mediaId: targetMedia.id, seriesTitle: descriptor.title, unitTitle: descriptor.volume, ...(resource.volume !== undefined ? { unitNumber: resource.volume } : {}) },
       });
       await provider.downloadNovel(resource.id, {
         incomingRoot: settings.incomingDirectory,
@@ -430,7 +434,7 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
         }),
       });
       if (!await localDownloadStore.complete(localTaskId, outputPath)) return false;
-      if (generation === loadGeneration) resourceNotice.value = `已生成 TXT：${outputPath}（${descriptor.chapterCount} 章）`;
+      if (generation === loadGeneration) { resourceNotice.value = `已生成 TXT：${outputPath}（${descriptor.chapterCount} 章）`; completedLocalTaskId.value = localTaskId; }
       return true;
     }
     if ((provider?.prepareMangaDownload || provider?.downloadMangaChapter) && isMangaResource(resource)) {
@@ -447,8 +451,13 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
       const stamp = `${Date.now()}-${newId()}`;
       const outputRoot = settings.obsidianEbookDirectory;
       const tempDirectory = joinWindowsPath(settings.incomingDirectory, "MangaTemp", stamp);
+      // A source work ID identifies the edition. Keep same-title adaptations in
+      // separate directories instead of overwriting or resuming another book.
+      const edition = metadataString(resource, "editionLabel");
+      const editionKey = `${sourceConfig?.id ?? resource.sourceId}-${resource.sourceItemId}`;
       const mangaFile = `${sanitizeFileName(`${descriptor.title} - ${descriptor.chapter}`).slice(0, 165)}.cbz`;
-      const outputPath = joinWindowsPath(outputRoot, mangaFile);
+      const editionDirectory = sanitizeFileName(`${descriptor.title} - ${edition || "来源版本"} - ${resource.sourceItemId}`).slice(0, 140);
+      const outputPath = joinWindowsPath(outputRoot, editionDirectory, mangaFile);
       localTaskId = localDownloadStore.create({
         kind: "manga",
         title: `${descriptor.title} · ${descriptor.chapter}`,
@@ -459,6 +468,7 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
           { path: tempDirectory, allowedRoot: settings.incomingDirectory },
         ],
         totalUnits: descriptor.imageUrls.length,
+        reading: { mediaId: targetMedia.id, editionId: editionKey, seriesTitle: descriptor.title + (edition ? ` · ${edition}` : ""), unitTitle: descriptor.chapter, ...(resource.chapter !== undefined ? { unitNumber: resource.chapter } : {}) },
       });
       const input = {
         imageUrls: descriptor.imageUrls,
@@ -479,7 +489,7 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
       if (provider.downloadMangaChapter) await provider.downloadMangaChapter(resource.id, input);
       else await createMangaChapterService().downloadAndPackage(input);
       if (!await localDownloadStore.complete(localTaskId, outputPath)) return false;
-      if (generation === loadGeneration) resourceNotice.value = `已生成 CBZ：${outputPath}`;
+      if (generation === loadGeneration) { resourceNotice.value = `已生成 CBZ：${outputPath}`; completedLocalTaskId.value = localTaskId; }
       return true;
     }
     const target = provider ? await provider.resolve(resource.id) : parseDownloadTarget(resource.targetUrl);
@@ -690,6 +700,7 @@ function isAbsoluteWindowsPath(value: string): boolean {
       <p v-if="saveError || library.error || media.metadata.sourceSaveError" class="subject-inline-error" role="alert">{{ saveError || library.error || media.metadata.sourceSaveError }}；这不会影响当前作品的资料浏览。</p>
       <p v-if="metadataNotice" class="subject-inline-note">{{ metadataNotice }}</p>
       <SubjectResourcePanel :media-type="media.type" v-if="resourcePanelOpen || resources.length" v-model:source="resourceSourceFilter" v-model:keyword="sourceSearchKeyword" v-model:filter="resourceQuery" v-model:protocol="resourceProtocol" v-model:manual-url="manualResourceUrl" v-model:manual-title="manualResourceTitle" :options="resourceSourceOptions" :resources="visibleResources" :selected="selectedResourceIds" :loading="resourceLoading" :queried="resourceSearchRequested" :error="resourceError" :notice="resourceNotice" :adding="addingResourceId" :batch-adding="batchAdding" :source-names="sourceNamesView" :group-titles="resourceGroupTitles" :warnings="resourceWarnings" :manual-adding="manualAdding" :exact="!!exactSource" @search="requestResourceSearch" @enable="enableSourceAndSearch" @add="addResource" @batch="addSelectedResources" @toggle="toggleResource" @toggle-all="toggleAllVisible" @manual="addManualResource" />
+      <div v-if="completedLocalTaskId && localDownloadStore.ownedOutputPath(completedLocalTaskId)" class="form-footer"><span class="success-message">下载完成，已可离线观看</span><RouterLink class="primary-button" :to="'/viewer/local/' + encodeURIComponent(completedLocalTaskId)">{{ media.type === 'anime' ? '立即播放' : '立即阅读' }}</RouterLink></div>
       <div class="subject-information-grid">
         <section class="subject-story"><header><h2>关于这部作品</h2><span>{{ details?.airDate || (media.releaseYear ? media.releaseYear + ' 年' : '') }}</span></header><p>{{ details?.summary || media.description || '暂时没有简介。来源作品可以先查看章节和文件，资料后续仍可补充。' }}</p><div v-if="details?.tags.length" class="subject-topic-tags"><span v-for="tag in details.tags.slice(0, 12)" :key="tag">{{ tag }}</span></div><p v-if="detailsError" class="subject-inline-note">{{ detailsError }}</p></section>
         <aside class="subject-facts"><h2>作品信息</h2><dl><template v-if="details?.episodes"><dt>话数</dt><dd>{{ details.episodes }} 话</dd></template><template v-if="details?.studios.length"><dt>制作</dt><dd>{{ details.studios.join(' / ') }}</dd></template><template v-if="details?.developers.length"><dt>开发</dt><dd>{{ details.developers.join(' / ') }}</dd></template><template v-if="details?.platforms.length"><dt>平台</dt><dd>{{ details.platforms.join(' / ') }}</dd></template><template v-if="details?.durationMinutes"><dt>时长</dt><dd>{{ formatDuration(details.durationMinutes) }}</dd></template><dt>类型</dt><dd>{{ typeLabel(media.type) }}</dd><template v-if="media.aliases.length"><dt>别名</dt><dd>{{ media.aliases.slice(0, 4).join(' / ') }}</dd></template></dl></aside>

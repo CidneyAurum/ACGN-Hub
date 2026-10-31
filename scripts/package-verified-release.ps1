@@ -102,6 +102,10 @@ $nativeNote = if ($nativeRelativePath) {
     ConvertFrom-Utf8Base64 '5pys5qyh5omT5YyF5rKh5pyJ6ZmE5Y6f55Sf5ryr55S76L+Q6KGM6K+B5o2u77yb6Z2Z5oCB5omr5o+P5LiN5Luj6KGo5LiL6L295rWB56iL5bey57uP6aqM5pS244CC'
 }
 $notes = $notes.Replace('__VERSION__', $version).Replace('__SCAN_EVIDENCE__', $scanRelativePath).Replace('__NATIVE_EVIDENCE_NOTE__', $nativeNote)
+$versionGuide = Join-Path $taskRoot ("docs\releases\v{0}-usage.md" -f $version)
+if (Test-Path -LiteralPath $versionGuide -PathType Leaf) {
+    $notes = [IO.File]::ReadAllText($versionGuide, [Text.Encoding]::UTF8)
+}
 $launcher = @(
     '@echo off',
     'setlocal',
@@ -141,7 +145,7 @@ $manifest = [ordered]@{
     product = $productName
     version = $version
     platform = 'Windows x64'
-    releaseScope = 'v035 real book discovery, unified bookmark-star branding, source curation and workflow fixes; naming and BT reliability retained'
+    releaseScope = if ($version -eq '0.3.6') { 'v036 in-app comic/novel/video viewing, continuous/fullscreen reading, per-work continuation, manga edition selection and official Bangumi author search' } else { 'v035 real book discovery, unified bookmark-star branding, source curation and workflow fixes; naming and BT reliability retained' }
     sourceRepository = 'https://github.com/CidneyAurum/ACGN-Hub'
     thirdPartyNotices = $noticeFiles
     bookDiscovery = [ordered]@{
@@ -180,6 +184,19 @@ $manifest = [ordered]@{
         legacyLocalMp4PreviewRetained = $true
         pathHandling = 'native canonical checks within task or explicitly configured roots; no arbitrary parent allowance'
     }
+    inAppViewer = [ordered]@{
+        available = ($version -eq '0.3.6')
+        comics = 'read-only CBZ pages; default continuous scroll or single-page mode, bounded nearby images, natural filename order, page jump, arrow keys, fullscreen toolbar/navigation and saved position'
+        novels = 'UTF-8 TXT with optional BOM; plain-text chapter navigation, font size, line height, paper themes, reading width and saved scroll position'
+        video = 'WebView2 media controls; bounded Range reads and saved playback position; codecs depend on the system'
+        fallback = 'system default application remains available; EPUB/PDF are external only'
+        access = 'current completed task output only; opaque in-memory sessions revoked when leaving; no archive extraction'
+        limits = '1000 comic pages, 50 MiB/page, 500 MiB uncompressed chapter, 20 MiB TXT, 8 MiB video chunk'
+        userMediaBundled = $false
+        continuation = 'only completed, allowlisted outputs of the same known work/edition; cancellable automatic next chapter/volume; no new downloads'
+    }
+    authorSearch = 'unified query matches subject titles and reliable person names/aliases; official person-subject relationships appear directly as works, with no person-card prerequisite'
+    mangaEditions = 'same-title source works remain separate by source ID, authors and chapter metadata; new chapter output directories include the edition identity'
     localOutputPersistence = 'retain published output and pending in-memory history on storage failure; retry/export before close; no rebuild while pending'
     completedDownloadNaming = [ordered]@{
         enabledByDefault = $true

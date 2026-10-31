@@ -12,7 +12,7 @@ import { sourceSearchTerms, sourceTitleMatch } from "./source-matching";
 
 interface Options { fetcher?: TextFetcher; timeoutMs?: number; minIntervalMs?: number }
 interface HtmlNode { tag: string; attributes: Record<string, string>; children: HtmlNode[]; text: string }
-interface Manga { id: string; title: string; coverUrl?: string }
+interface Manga { id: string; title: string; coverUrl?: string; authors?: string[]; latestChapter?: string; status?: string; editionLabel?: string }
 interface ChapterEntry { resource: ResourceItem; chapterId: string }
 
 const ORIGIN = "https://mangabz.com";
@@ -75,7 +75,11 @@ export class MangabzSourceProvider implements SourceProvider {
           if (!id || !title || sourceTitleMatch(title, terms).score <= 0) continue;
           const image = find(item, (node) => node.tag === "img");
           const cover = image?.attributes["data-src"] || image?.attributes.src;
-          const manga: Manga = { id, title, ...(cover && safeImageUrl(cover) ? { coverUrl: safeImageUrl(cover)! } : {}) };
+          const chapter = find(item, (node) => hasClass(node, "chapter"));
+          const latest = chapter ? find(chapter, (node) => node.tag === "a") : undefined;
+          const status = chapter ? content(chapter).replace(latest ? content(latest) : "", "").trim() : "";
+          const manga: Manga = { id, title, ...(cover && safeImageUrl(cover) ? { coverUrl: safeImageUrl(cover)! } : {}),
+            ...(latest ? { latestChapter: content(latest).trim() } : {}), ...(status ? { status } : {}), editionLabel: `MangaBZ 版本 #${id}` };
           matches.set(id, manga);
           this.mangas.set(id, manga);
         }
@@ -86,7 +90,8 @@ export class MangabzSourceProvider implements SourceProvider {
     return [...matches.values()]
       .sort((a, b) => sourceTitleMatch(b.title, terms).score - sourceTitleMatch(a.title, terms).score)
       .slice(0, 12).map((item) => ({ sourceId: this.id, sourceItemId: item.id, title: item.title,
-        ...(item.coverUrl ? { coverUrl: item.coverUrl } : {}), raw: { provider: "MangaBZ", language: "zh" } }));
+        ...(item.coverUrl ? { coverUrl: item.coverUrl } : {}), raw: { provider: "MangaBZ", language: "zh", authors: item.authors ?? [],
+          editionLabel: item.editionLabel, ...(item.latestChapter ? { latestChapter: item.latestChapter } : {}), ...(item.status ? { status: item.status } : {}) } }));
   }
 
   async listResources(sourceItemId: string): Promise<ResourceItem[]> {
@@ -97,6 +102,12 @@ export class MangabzSourceProvider implements SourceProvider {
     if (!title) throw new Error("MangaBZ 作品详情格式已变化，请在原站确认作品");
     const list = find(document, (node) => node.attributes.id === "chapterlistload");
     if (!list) throw new Error("MangaBZ 当前作品没有可下载图片章节，或章节目录格式已变化");
+    const info = find(document, (node) => hasClass(node, "detail-info-tip"));
+    const authorBlock = info ? descendants(info).find((node) => node.tag === "span" && /^作者\s*[:：]/u.test(content(node).trim())) : undefined;
+    const authors = authorBlock ? [...new Set(descendants(authorBlock).filter((node) => node.tag === "a").flatMap((node) => content(node).trim().split(/\s{2,}|\s*[/／、,，]\s*/u)).filter(Boolean))] : [];
+    const editionLabel = authors.length ? authors.join(" / ") + "版" : this.mangas.get(sourceItemId)?.editionLabel ?? `MangaBZ 版本 #${sourceItemId}`;
+    const manga = this.mangas.get(sourceItemId);
+    if (manga) this.mangas.set(sourceItemId, { ...manga, authors, editionLabel });
     const resources = new Map<string, ResourceItem>();
     for (const node of descendants(list).filter((node) => node.tag === "a")) {
       const id = chapterId(node.attributes.href);
@@ -111,13 +122,19 @@ export class MangabzSourceProvider implements SourceProvider {
         title: `${title} · ${chapterName}`, protocol: "http", targetUrl: `${ORIGIN}/m${id}/`,
         ...(Number.isFinite(number) ? { chapter: number } : {}), language: "zh", format: "CBZ",
         metadata: { provider: "MangaBZ", downloadMode: "manga_cbz", mangaId: sourceItemId, chapterId: id,
-          chapterName, seriesTitle: title, pages, translatedLanguage: "zh" }, createdAt: new Date().toISOString(),
+          chapterName, seriesTitle: title, pages, translatedLanguage: "zh", authors, editionLabel }, createdAt: new Date().toISOString(),
       };
       this.chapters.set(resource.id, { resource, chapterId: id });
       resources.set(id, resource);
     }
     if (!resources.size) throw new Error("MangaBZ 当前作品没有可下载图片章节，或章节目录格式已变化");
-    return [...resources.values()].sort((a, b) => (a.chapter ?? Number.MAX_SAFE_INTEGER) - (b.chapter ?? Number.MAX_SAFE_INTEGER));
+    const values = [...resources.values()].sort((a, b) => (a.chapter ?? Number.MAX_SAFE_INTEGER) - (b.chapter ?? Number.MAX_SAFE_INTEGER));
+    const latest = values.filter((resource) => /^第\s*\d+(?:\.\d+)?\s*[话話集章]/u.test(String(resource.metadata.chapterName))).at(-1);
+    for (const resource of values) {
+      resource.metadata.chapterCount = values.length;
+      if (latest) resource.metadata.latestChapter = latest.metadata.chapterName;
+    }
+    return values;
   }
 
   restoreResource(resource: ResourceItem): void {

@@ -11,6 +11,7 @@ mod database;
 mod diagnostics;
 mod downloaded_media;
 mod image_format;
+mod local_viewer;
 mod manga_downloads;
 mod media_images;
 mod network;
@@ -1468,8 +1469,16 @@ pub fn run() {
         }
     }
     let exit_code = tauri::Builder::default()
+        .on_page_load(|_webview, payload| {
+            if matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
+                local_viewer::reset_local_viewer_sessions();
+            }
+        })
         .register_asynchronous_uri_scheme_protocol("acgn-image", |context, request, responder| {
             media_images::respond_image_protocol(context.app_handle().clone(), request, responder);
+        })
+        .register_asynchronous_uri_scheme_protocol("acgn-local", |context, request, responder| {
+            local_viewer::respond_local_viewer_protocol(context.app_handle().clone(), request, responder);
         })
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
@@ -1490,6 +1499,8 @@ pub fn run() {
             completed_rename::rename_completed_download,
             completed_rename::recover_completed_download_renames,
             downloaded_media::open_downloaded_media,
+            local_viewer::prepare_local_viewer,
+            local_viewer::close_local_viewer,
             public_video::inspect_public_video,
             public_video::download_public_video,
             public_video::cancel_public_video,

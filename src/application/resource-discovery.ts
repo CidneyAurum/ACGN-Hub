@@ -104,7 +104,14 @@ export async function discoverResources(input: ResourceDiscoveryInput, factory: 
   const failures = [...searched.failures];
   await Promise.all([...groups.values()].map(async (candidates) => {
     const isFeed = candidates[0].config.type === "rss";
-    const choices = isFeed ? candidates.slice(0, 24) : candidates.slice(0, 1);
+    // For chapter-based book sources, do not silently discard a second exact
+    // work match: different editions can have materially different chapter
+    // ranges (for example an 18-chapter short edition versus a 60-chapter
+    // complete edition). The user must see and choose the correct work.
+    const bookChoices = candidates.filter((candidate) => candidate.score >= 80);
+    const choices = isFeed ? candidates.slice(0, 24) : input.mediaType === "manga" || input.mediaType === "novel"
+      ? (bookChoices.length ? bookChoices : candidates.slice(0, 1)).slice(0, 12)
+      : candidates.slice(0, 1);
     for (const choice of choices) {
       try {
         const resources = await choice.provider.listResources(choice.candidate.sourceItemId);

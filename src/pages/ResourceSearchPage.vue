@@ -83,6 +83,18 @@ function chooseType(value: MediaType): void {
   type.value = value;
   void router.replace({ query: { ...route.query, type: value, q: keyword.value.trim() || undefined, provider: undefined, sourceId: undefined } });
 }
+
+function candidateDetails(choice: SourceCandidate): string[] {
+  const raw = choice.candidate.raw;
+  if (!raw) return [];
+  const authors = Array.isArray(raw.authors) ? raw.authors.filter((value): value is string => typeof value === "string") : [];
+  return [authors.length ? `作者：${authors.join(' / ')}` : undefined,
+    typeof raw.editionLabel === "string" ? raw.editionLabel : undefined,
+    typeof raw.status === "string" ? raw.status : undefined,
+    typeof raw.latestChapter === "string" ? `最新：${raw.latestChapter}` : undefined,
+    typeof raw.chapterCount === "number" ? `${raw.chapterCount} 条章节` : undefined]
+    .filter((value): value is string => Boolean(value));
+}
 async function rememberRoute(): Promise<void> {
   const provider = selectedSource.value?.type;
   const sourceId = selectedSource.value?.id;
@@ -141,6 +153,9 @@ async function selectWork(choice: SourceCandidate): Promise<void> {
     id: `source:${config.id}:${candidate.sourceItemId}`, type: selectedType, title: candidate.title,
     aliases: [...new Set([selectedKeyword, candidate.title].filter(Boolean))],
     externalIds: [], metadata: { sourceConfigId: config.id, sourceItemId: candidate.sourceItemId,
+      ...(candidate.raw?.authors ? { sourceAuthors: candidate.raw.authors } : {}),
+      ...(candidate.raw?.editionLabel ? { sourceEdition: candidate.raw.editionLabel } : {}),
+      ...(candidate.raw?.chapterCount ? { sourceChapterCount: candidate.raw.chapterCount } : {}),
       sourceProviderId: provider.id, sourceType: config.type, sourceTitle: candidate.title, sourceQuery: selectedKeyword, sourceMatchWarnings: choice.warnings },
     ...(candidate.coverUrl ? { coverUrl: candidate.coverUrl } : {}),
     ...(candidate.releaseYear ? { releaseYear: candidate.releaseYear } : {}),
@@ -184,7 +199,7 @@ async function selectWork(choice: SourceCandidate): Promise<void> {
     <div class="resource-work-grid">
       <article v-for="choice in candidates" :key="choice.config.id + choice.candidate.sourceItemId" class="resource-work-card">
         <div class="resource-work-cover" role="button" tabindex="0" :aria-label="'选择 ' + choice.candidate.title + ' 并查看资源'" @click="!selecting && selectWork(choice)" @keydown.enter.prevent="!selecting && selectWork(choice)" @keydown.space.prevent="!selecting && selectWork(choice)"><MediaPoster :src="choice.candidate.coverUrl" :alt="choice.candidate.title + ' 封面'" /></div>
-        <div class="resource-work-content"><span class="resource-work-source">{{ choice.config.name }}</span><h3><button class="resource-title-button" type="button" :disabled="!!selecting" @click="selectWork(choice)">{{ choice.candidate.title }}</button></h3><p v-if="choice.candidate.raw?.durationLabel || choice.candidate.raw?.uploader" class="resource-work-year">{{ choice.candidate.raw?.durationLabel }}<span v-if="choice.candidate.raw?.uploader"> · {{ choice.candidate.raw.uploader }}</span></p><p v-if="choice.candidate.releaseYear" class="resource-work-year">{{ choice.candidate.releaseYear }}</p><p v-for="warning in choice.warnings" :key="warning" class="resource-match-warning">{{ warning }}</p><button class="small-button" :disabled="!!selecting" type="button" @click="selectWork(choice)">{{ selecting === choice.candidate.sourceItemId ? '正在打开…' : '选择作品并查看资源' }}</button></div>
+        <div class="resource-work-content"><span class="resource-work-source">{{ choice.config.name }}</span><h3><button class="resource-title-button" type="button" :disabled="!!selecting" @click="selectWork(choice)">{{ choice.candidate.title }}</button></h3><p v-for="detail in candidateDetails(choice)" :key="detail" class="resource-work-year">{{ detail }}</p><p v-if="choice.candidate.raw?.durationLabel || choice.candidate.raw?.uploader" class="resource-work-year">{{ choice.candidate.raw?.durationLabel }}<span v-if="choice.candidate.raw?.uploader"> · {{ choice.candidate.raw.uploader }}</span></p><p v-if="choice.candidate.releaseYear" class="resource-work-year">{{ choice.candidate.releaseYear }}</p><p v-for="warning in choice.warnings" :key="warning" class="resource-match-warning">{{ warning }}</p><button class="small-button" :disabled="!!selecting" type="button" @click="selectWork(choice)">{{ selecting === choice.candidate.sourceItemId ? '正在打开…' : '选择作品并查看资源' }}</button></div>
       </article>
     </div>
   </section>

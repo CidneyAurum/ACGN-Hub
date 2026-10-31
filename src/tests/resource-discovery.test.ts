@@ -199,6 +199,21 @@ describe("source work discovery", () => {
     expect(result.resources).toHaveLength(1);
   });
 
+  it("keeps both same-title manga editions rather than silently choosing the first short edition", async () => {
+    const provider = providerFixture();
+    vi.mocked(provider.search).mockResolvedValue([
+      { sourceId: "copy", sourceItemId: "old", title: "安達與島村" },
+      { sourceId: "copy", sourceItemId: "new", title: "安達與島村" },
+    ]);
+    vi.mocked(provider.listResources).mockImplementation(async (id) => [{ id: id + "-chapter", sourceId: "copy", sourceItemId: id,
+      title: "安達與島村 · " + (id === "old" ? "第18話" : "第60話"), protocol: "http", targetUrl: `https://api.example/${id}/chapter`, createdAt: "2026-01-01", metadata: {} }]);
+    const result = await discoverResources({ keyword: "安达与岛村", mediaType: "manga", sources: [source] }, () => provider);
+    expect(provider.listResources).toHaveBeenCalledWith("old");
+    expect(provider.listResources).toHaveBeenCalledWith("new");
+    expect(result.items.map((item) => item.resource.sourceItemId)).toEqual(["old", "new"]);
+    expect(result.items[1].resource.title).toContain("第60話");
+  });
+
   it("keeps the first season before a newer second-season release after service ranking", async () => {
     const provider = providerFixture();
     provider.supportedTypes.splice(0, 1, "anime");

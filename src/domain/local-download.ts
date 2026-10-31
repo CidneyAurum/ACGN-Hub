@@ -6,6 +6,14 @@ export interface LocalDownloadCleanupPath {
   allowedRoot: string;
 }
 
+export interface LocalDownloadReading {
+  mediaId?: string;
+  editionId?: string;
+  seriesTitle: string;
+  unitTitle?: string;
+  unitNumber?: number;
+}
+
 export interface LocalDownloadTask {
   id: string;
   kind: LocalDownloadKind;
@@ -13,6 +21,7 @@ export interface LocalDownloadTask {
   sourceName: string;
   directory: string;
   outputPath: string;
+  reading?: LocalDownloadReading;
   cleanupPaths?: LocalDownloadCleanupPath[];
   stage: LocalDownloadStage;
   completedUnits: number;

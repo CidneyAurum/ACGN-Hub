@@ -15,6 +15,7 @@ export default createRouter({
     { path: "/games", component: () => import("@/pages/GamesPage.vue") },
     { path: "/feeds", component: () => import("@/pages/FeedsPage.vue") },
     { path: "/downloads", component: () => import("@/pages/DownloadsPage.vue") },
+    { path: "/viewer/:collection(local|engine)/:id", component: () => import("@/pages/LocalViewerPage.vue") },
     { path: "/organizer", component: () => import("@/pages/OrganizerPage.vue") },
     { path: "/settings", component: () => import("@/pages/SettingsPage.vue") },
     { path: "/:pathMatch(.*)*", component: () => import("@/pages/NotFoundPage.vue") },

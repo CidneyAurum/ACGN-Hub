@@ -33,6 +33,21 @@ function savedResource(provider: MangabzSourceProvider): ResourceItem {
 }
 
 describe("MangabzSourceProvider", () => {
+  it("keeps same-title editions separate and reads authors and true chapter count from their directories", async () => {
+    const search = `<ul class="mh-list"><li><h2><a href="/11470bz/">安達與島村</a></h2><p class="chapter"><span>最新</span><a href="/m133933/">第12.5話</a></p></li><li><h2><a href="/11469bz/">安達與島村</a></h2><p class="chapter"><span>完結</span><a href="/m133919/">第18話</a></p></li></ul>`;
+    const detail = `<p class="detail-info-title">安達與島村</p><p class="detail-info-tip"><span>作者：<a>入間人間  柚原もけ</a></span><span>狀態：<span>連載中</span></span></p><div id="chapterlistload"><a href="/m133933/">第12.5話 <span>（22P）</span></a><a href="/m514187/">第60話 <span>（22P）</span></a><a href="/m521973/">番外篇2 <span>（17P）</span></a></div>`;
+    const requests: string[] = [];
+    const provider = new MangabzSourceProvider(undefined, { minIntervalMs: 0, fetcher: async (url) => { requests.push(url); return response(url.includes("/search?") ? search : detail); } });
+    const candidates = await provider.search({ keyword: "安达与岛村", aliases: [], mediaType: "manga" });
+    expect(candidates.map((item) => item.sourceItemId)).toEqual(["11470", "11469"]);
+    expect(candidates[0].raw).toMatchObject({ editionLabel: "MangaBZ 版本 #11470", latestChapter: "第12.5話", status: "最新" });
+    const resources = await provider.listResources("11470");
+    expect(resources).toHaveLength(3);
+    expect(resources.every((item) => item.metadata.chapterCount === 3 && item.metadata.latestChapter === "第60話")).toBe(true);
+    expect(resources[0].metadata).toMatchObject({ authors: ["入間人間", "柚原もけ"], editionLabel: "入間人間 / 柚原もけ版" });
+    expect(requests).toHaveLength(2);
+    expect(requests.every((url) => !url.includes("chapterimage"))).toBe(true);
+  });
   it("queues concurrent requests at least 200 ms apart, including providers sharing the same transport", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);

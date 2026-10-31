@@ -1,6 +1,30 @@
 # ACGN Hub 0.3 验证记录
 
-## 最新增量：0.3.5 真实书籍发现与流程修复（验收与正式发布完成）
+## 最新增量：0.3.6 本地观看与统一作者搜索（本地验收完成，发布准备中）
+
+本轮最终交互为“同一搜索框输入作品名或作者名，直接看作品”，没有人物卡或预先选择模式。CBZ连续/单页阅读、全屏完整控件、TXT章节阅读、按作品目录及已下载同版接续已实现。最终正式程序的正常桌面、重启、数据保留和快捷方式已验收；GitHub正式发布仍在准备中。下表区分工程测试、此前候选与最终程序；详细范围见[本轮记录](docs/research/local-viewing-v036.md)。
+
+| 验证 | 当前证据与范围 |
+| --- | --- |
+| 全量Vitest | `.work/v036-unified-final-vitest.json`实际记录57个文件、450通过/0失败、success=true；覆盖作者姓名、来源版本、原生观看服务、章节解析及分组等，不代替真实桌面 |
+| Rust | 本轮86通过/0失败/2默认忽略；包括归档读取/页序/边界、会话及视频Range等。默认忽略项不计为已运行通过 |
+| 完整浏览器回归 | 67/67通过、4.1分钟，`.work/e2e/v036-unified-full-results/.last-run.json`为passed、failedTests=[]；固定响应覆盖不代表真实来源均可用 |
+| 统一搜索缓存 | 初次缓存专项7项通过，`.work/e2e/v036-unified-cache-results/.last-run.json`为passed；最后空缓存/作者/历史返回7项定向回归22.1秒全部通过，`.work/e2e/v036-unified-empty-cache-results/.last-run.json`为passed |
+| 官方作者API实查 | `.work/author-provider-live-smoke.json`：真实搜索入间人间取得人物6207，关联动画含安达与岛村/电波女与青春男，小说含说谎的男孩与坏掉的女孩；不把真实API结果当最终GUI已经通过 |
+| 已修原生失败 | 初次本地页图失败对应1058…候选：整条`convertFileSrc`编码令路由`/page/`变为`%2F`；已改为只转换会话token再追加真实路由，测试替身同时采用官方整参数编码语义，旧失败保留 |
+| 此前候选正常桌面 | `.work/v03-evidence/normal-v036-delivery/launch.json`为6D1B96886C123B210BF034EDA11461C1E238A580CA2C6E57EE02DA8709830438、PID38516、原032Data、无CDP/注入、防护开启；真实安达17页、连续滚动、全屏鼠标翻到第2页、返回恢复第2页已有截图/UIA |
+| 候选证据限制 | 6D1B…仍含被用户否定的人物卡界面；`author-related-works`截图仅保留为历史，不作为最终统一搜索交互验收。该候选的扫描与运行不能移记到最终95D19A…程序 |
+| 最终构建及扫描 | exe25,553,408字节，SHA256 `95D19AA77908C3E9056F5DE4E134D3C4D5BA8B7F5346165A78E342CD613403F4`；NSIS7,223,620字节，SHA256 `D0AFD2DD201473604821C2C18404205945F747DBC84665C3B003681BA1324A29`；`.work/security-audit/v036-unified-final-scan.json`两项退出0、防护开启、无新增检测，已打包，NSIS未安装 |
+| 最终正常桌面身份 | `.work/v03-evidence/normal-v036-unified/launch.json`为正式`release/v0.3.6`同95D19A…、PID5620、2026-10-31T02:50:19Z启动、原032Data、无CDP/注入、防护开启；本次正常桌面复验使用该文件，没有移记旧候选证据 |
+| 统一输入直接作品 | 最终session的`author-direct-work-results.json`/`.png`记录入间人间直接显示3部动画作品；`author-novel-results.json`/`.png`显示16项小说结果，其中1项标题相关、15项作者关联，不称16项全是作者作品。没有人物卡 |
+| 漫画版本及第60话 | 同session的`manga-two-source-editions.json`和`manga-edition-chapter60.json`/`.png`实际查看不同来源版本、柚原もけ版75条目录及第60话22页信息；这是目录核验，没有重新下载全卷 |
+| 最终漫画与正常重启 | `final-fullscreen-mouse-next.json`/`.png`实际全屏鼠标翻到第2页，`comic-continuous-final.png`显示连续阅读，`resume-page2-final.json`记录返回恢复第2页。PID5620正常退出0后，`normal-v036-restart/launch.json`记录同正式exe/原Data重启PID62636，`restart-resume-page2.json`/`.png`仍显示第2页；status无新增检测。用户已关闭GUI，不重开 |
+| 数据与文件保留 | `.work/v036-evidence/data-preservation.json`为passed，DB完整性ok；10个来源ID保留，用户并行使用期间3条配置发生修改，保留当前值、不回滚也不称全表字节不变。原2任务/3资源/1作品/1外部ID/0本地索引保持，选版核验新增1作品（现2）；3个媒体payload（含CBZ）hash及12个旧exe不变 |
+| 快捷方式与发布准备 | `.work/v036-evidence/shortcut-verification.json`为passed：桌面入口指向START-ACGN-0.3.6.cmd与036exe图标，仍用原032Data。程序/安装包/清单已打包；ZIP/附件回验及GitHub标签/Release仍待实际记录，不提前填写最终汇总或宣称发布完成 |
+
+旧用户文件不自动移动或重打包；阅读只读原始内容。漫画/小说接续只使用同作品同版、归属有效且已完成的文件；自动倒计时只在实际阅读到末尾且内容加载成功后触发。TXT阅读及自动接续主要通过固定响应场景验证，不称原生全卷下载与接续已实测。内置视频的模拟控件测试不证明本机所有编解码/字幕均可用，NSIS未实际安装。0.3.5及更早验收保持原日期、构建哈希和适用范围。
+
+## 历史增量：0.3.5 真实书籍发现与流程修复（验收与正式发布完成）
 
 已完成最终源码全量回归、构建、扫描、本地清单、真实35分钟漫画热门自动刷新、正式便携程序重启/正常退出、桌面入口、7附件实际下载回验及正式发布远端核验。最终汇总已实际生成并通过。不同候选的正常桌面证据分开标明；[本轮完整说明](docs/research/discovery-and-fixes-v035.md)保存接口依据、完整身份及验证范围。
 
