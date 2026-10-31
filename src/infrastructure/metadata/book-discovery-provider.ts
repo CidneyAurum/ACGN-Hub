@@ -10,6 +10,7 @@ export type BookDiscoveryType = "manga" | "novel";
 export type BookDiscoverySort = "heat" | "score" | "recent";
 export const BOOK_DISCOVERY_PAGE_SIZE = 24;
 const API_PAGE_SIZE = 20;
+const NOVEL_FIRST_BATCH_SIZE = 8;
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const CACHE_PREFIX = "acgn-hub.discovery-book.v1";
 const ENDPOINT = "https://api.bgm.tv/v0/search/subjects";
@@ -27,6 +28,8 @@ export interface BookDiscoveryResult {
   updatedAt: string;
   cached: boolean;
   stale: boolean;
+  /** A valid prefix of this page is available; retry this page before advancing. */
+  partial?: boolean;
   warning?: string;
 }
 
@@ -40,6 +43,8 @@ export interface BookDiscoveryOptions {
   timeoutMs?: number;
   /** null disables persistent caching. */
   storage?: BookCacheStorage | null;
+  /** Valid cached or newly received books can render before the remaining request finishes. */
+  onProgress?: (result: BookDiscoveryResult) => void;
 }
 
 const subjectSchema = z.object({
@@ -98,6 +103,7 @@ const cacheSchema = z.object({
   items: z.array(cachedMediaSchema).max(BOOK_DISCOVERY_PAGE_SIZE),
   total: z.number().int().nonnegative(),
   hasMore: z.boolean(),
+  partial: z.boolean().optional(),
   updatedAt: z.string().datetime(),
 });
 
@@ -117,7 +123,7 @@ export async function getBookDiscovery(type: BookDiscoveryType, options: BookDis
   const now = options.now ?? Date.now;
   const timestamp = now();
   if (!Number.isFinite(timestamp)) throw new RangeError("书籍更新时间无效");
-  const timeoutMs = options.timeoutMs ?? 12_000;
+  const timeoutMs = options.timeoutMs ?? (type === "novel" ? 20_000 : 12_000);
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new RangeError("书籍请求超时设置无效");
   const boundedTimeout = Math.min(35_000, timeoutMs);
   const storage = options.storage === undefined ? defaultStorage() : options.storage;
@@ -126,7 +132,10 @@ export async function getBookDiscovery(type: BookDiscoveryType, options: BookDis
   const cached = readCache(storage, key, type, sort, page, range);
   const age = cached ? timestamp - Date.parse(cached.updatedAt) : Infinity;
   if (options.signal?.aborted) throw cancellationReason(options.signal);
-  if (!options.refresh && cached && age >= 0 && age < CACHE_TTL_MS) return { ...cached, cached: true, stale: false };
+  if (!options.refresh && cached && !cached.partial && age >= 0 && age < CACHE_TTL_MS) return { ...cached, cached: true, stale: false };
+  // Show a usable saved shelf immediately, without changing its original date.
+  if (cached?.items.length) options.onProgress?.({ ...cached, cached: true, stale: age < 0 || age >= CACHE_TTL_MS,
+    warning: "正在更新推荐，先显示已保存的目录" });
 
   const controller = new AbortController();
   const cancel = () => controller.abort(cancellationReason(options.signal!));
@@ -139,39 +148,43 @@ export async function getBookDiscovery(type: BookDiscoveryType, options: BookDis
     ...(sort === "score" ? { rating_count: [">=50"] } : {}),
     ...(sort === "recent" ? { air_date: [`>=${range.start}`, `<${range.end}`] } : {}),
   };
-  try {
-    const parsed = await abortableRequest(async () => {
-      const rawSubjects: unknown[] = [];
-      let total = 0;
-      while (rawSubjects.length < BOOK_DISCOVERY_PAGE_SIZE) {
-        const requestOffset = offset + rawSubjects.length;
-        const requestLimit = Math.min(API_PAGE_SIZE, BOOK_DISCOVERY_PAGE_SIZE - rawSubjects.length);
-        const result = await requestPage(fetcher, requestOffset, requestLimit, filter, sort, controller.signal, boundedTimeout);
-        if (!rawSubjects.length) total = result.total;
-        rawSubjects.push(...result.data);
-        if (!result.data.length || result.data.length < result.limit || offset + rawSubjects.length >= total) break;
-      }
-      return { total, rawSubjects };
-    }, controller.signal);
-    const seen = new Set<number>();
-    const items = parsed.rawSubjects.flatMap((value) => {
-      const parsedSubject = subjectSchema.safeParse(value);
-      if (!parsedSubject.success) return [];
-      const subject = parsedSubject.data;
-      if (!usableSubject(subject, type, sort, range) || seen.has(subject.id)) return [];
-      seen.add(subject.id);
-      return [toMedia(subject, type)];
-    });
-    const result: BookDiscoveryResult = {
-      type, sort, items, total: parsed.total, page, pageSize: BOOK_DISCOVERY_PAGE_SIZE,
-      hasMore: parsed.rawSubjects.length > 0 && offset + BOOK_DISCOVERY_PAGE_SIZE < parsed.total,
-      updatedAt: new Date(now()).toISOString(), cached: false, stale: false,
-    };
+  const rawSubjects: unknown[] = [];
+  let total = 0;
+  let latest: BookDiscoveryResult | undefined;
+  const makeResult = (partial: boolean): BookDiscoveryResult => ({
+    type, sort, items: discoveryItems(rawSubjects, type, sort, range), total, page, pageSize: BOOK_DISCOVERY_PAGE_SIZE,
+    hasMore: rawSubjects.length > 0 && offset + BOOK_DISCOVERY_PAGE_SIZE < total,
+    updatedAt: new Date(now()).toISOString(), cached: false, stale: false, partial,
+  });
+  const saveResult = (result: BookDiscoveryResult) => {
+    if (result.partial && cached && !cached.partial && cached.items.length >= result.items.length) return;
     try { storage?.setItem(key, JSON.stringify({ version: 1, ...result })); } catch { /* Quota/private mode must not hide discoveries. */ }
-    return result;
+  };
+  try {
+    while (rawSubjects.length < BOOK_DISCOVERY_PAGE_SIZE) {
+      const requestOffset = offset + rawSubjects.length;
+      const firstLimit = type === "novel" && page === 1 && rawSubjects.length === 0 ? NOVEL_FIRST_BATCH_SIZE : API_PAGE_SIZE;
+      const requestLimit = Math.min(firstLimit, BOOK_DISCOVERY_PAGE_SIZE - rawSubjects.length);
+      const response = await abortableRequest(() => requestPage(fetcher, requestOffset, requestLimit, filter, sort, controller.signal, boundedTimeout), controller.signal);
+      if (!rawSubjects.length) total = response.total;
+      rawSubjects.push(...response.data);
+      const complete = !response.data.length || response.data.length < response.limit || offset + rawSubjects.length >= total || rawSubjects.length >= BOOK_DISCOVERY_PAGE_SIZE;
+      latest = makeResult(!complete);
+      if (latest.items.length || complete) {
+        saveResult(latest);
+        if (!complete) options.onProgress?.({ ...latest, warning: "已显示首批推荐，正在补全这一页" });
+      }
+      if (complete) return latest;
+    }
+    return latest!;
   } catch (cause) {
     // Switching categories must never restore the abandoned category's cache.
     if (options.signal?.aborted) throw cancellationReason(options.signal);
+    if (cached && !cached.partial && latest?.items.length && cached.items.length >= latest.items.length) {
+      return { ...cached, cached: true, stale: true, warning: "书籍推荐未能完整更新，正在显示该分类的已保存目录" };
+    }
+    if (latest?.items.length) return { ...latest, partial: true,
+      warning: "已保留本页已获取的推荐，其余条目暂未加载；可点击补全本页重试" };
     if (cached) return { ...cached, cached: true, stale: true, warning: "书籍推荐暂时无法更新，正在显示该分类的缓存" };
     if (controller.signal.aborted) throw controller.signal.reason;
     throw cause;
@@ -179,6 +192,18 @@ export async function getBookDiscovery(type: BookDiscoveryType, options: BookDis
     clearTimeout(timer);
     options.signal?.removeEventListener("abort", cancel);
   }
+}
+
+function discoveryItems(rawSubjects: unknown[], type: BookDiscoveryType, sort: BookDiscoverySort, range: { start: string; end: string }): Media[] {
+  const seen = new Set<number>();
+  return rawSubjects.flatMap((value) => {
+    const parsedSubject = subjectSchema.safeParse(value);
+    if (!parsedSubject.success) return [];
+    const subject = parsedSubject.data;
+    if (!usableSubject(subject, type, sort, range) || seen.has(subject.id)) return [];
+    seen.add(subject.id);
+    return [toMedia(subject, type)];
+  });
 }
 
 async function requestPage(fetcher: JsonFetcher, offset: number, limit: number, filter: Record<string, unknown>, sort: BookDiscoverySort, signal: AbortSignal, timeoutMs: number) {
@@ -287,6 +312,7 @@ function readCache(storage: BookCacheStorage | null, key: string, type: BookDisc
       const raw = subjectSchema.safeParse(item.metadata.raw);
       return item.type === type && raw.success && item.id === `bangumi:${raw.data.id}` && usableSubject(raw.data, type, sort, range) && item.coverUrl === coverUrl(raw.data);
     })) return undefined;
-    return { type, sort, items: value.items, total: value.total, page, pageSize: BOOK_DISCOVERY_PAGE_SIZE, hasMore: value.hasMore, updatedAt: value.updatedAt, cached: true, stale: false };
+    return { type, sort, items: value.items, total: value.total, page, pageSize: BOOK_DISCOVERY_PAGE_SIZE, hasMore: value.hasMore, updatedAt: value.updatedAt, cached: true, stale: false,
+      ...(value.partial === undefined ? {} : { partial: value.partial }) };
   } catch { return undefined; }
 }

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { isTauriRuntime } from "./runtime";
+import { initializePortableProfile } from "./portable-profile";
 
 export type DownloadEngineKind = "aria2" | "qbittorrent";
 export interface AppSettings {
@@ -70,6 +71,7 @@ let initializing: Promise<AppSettings> | undefined;
 export function initializeSettings(): Promise<AppSettings> {
   initializing ??= (async () => {
     if (!isTauriRuntime()) return loadSettings();
+    await initializePortableProfile();
     const defaults = await invoke<RuntimeDefaults>("get_runtime_defaults");
     const settings = loadSettings();
     settings.incomingDirectory ||= defaults.incomingDirectory;

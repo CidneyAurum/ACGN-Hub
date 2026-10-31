@@ -25,6 +25,62 @@ function providerFixture() {
   return provider;
 }
 
+it("retains a source-confirmed novel author's works without treating description mentions as authors", async () => {
+  const provider = providerFixture();
+  provider.supportedTypes.splice(0, 1, "novel");
+  vi.mocked(provider.search).mockResolvedValue([
+    { sourceId: "lnovel", sourceItemId: "1", title: "安达与岛村", raw: { authors: ["入间人间"] } },
+    { sourceId: "lnovel", sourceItemId: "2", title: "妹妹人生", raw: { authors: ["入間人間"] } },
+    { sourceId: "lnovel", sourceItemId: "3", title: "其他小说", raw: { authors: ["别人"], description: "推荐给入间人间的读者" } },
+  ]);
+  const result = await searchSourceCandidates({ keyword: "入间人间", mediaType: "novel", sources: [{ ...source, type: "lnovel" }] }, () => provider);
+  expect(result.candidates.map((item) => item.candidate.sourceItemId)).toEqual(["1", "2"]);
+  expect(result.candidates.every((item) => item.score === 100)).toBe(true);
+});
+
+it("matches two-character CJK book and game titles while keeping the feed threshold", async () => {
+  const provider = providerFixture();
+  vi.mocked(provider.search).mockResolvedValue([{ sourceId: "shionlib", sourceItemId: "water", title: "水仙 1st & 2nd" }]);
+  const game = await searchSourceCandidates({ keyword: "水仙", mediaType: "visual_novel", sources: [{ ...source, type: "shionlib" }] }, () => provider);
+  expect(game.candidates).toHaveLength(1);
+  const anime = await searchSourceCandidates({ keyword: "水仙", mediaType: "anime", sources: [{ ...source, type: "rss" }] }, () => provider);
+  expect(anime.candidates).toEqual([]);
+  expect(rankSourceCandidates([{ sourceId: "s", sourceItemId: "1", title: "Hair Trial" }], "AI", [], 12, { allowShortCjk: true })).toEqual([]);
+});
+
+it("reports a fast source before the slow source settles and preserves a later source failure", async () => {
+  const fast = providerFixture();
+  const slow = providerFixture();
+  let rejectSlow!: (reason: Error) => void;
+  vi.mocked(slow.search).mockImplementation(() => new Promise((_, reject) => { rejectSlow = reject; }));
+  const progress = vi.fn();
+  const pending = searchSourceCandidates({ keyword: "葬送的芙莉莲", mediaType: "manga", sources: [source, { ...source, id: "slow" }], onSourceResult: progress }, (config) => config.id === "slow" ? slow : fast);
+  await vi.waitFor(() => expect(progress).toHaveBeenCalledTimes(1));
+  expect(progress.mock.calls[0][0]).toMatchObject({ config: { id: "copy" }, completed: 1, total: 2 });
+  expect(progress.mock.calls[0][0].candidates.length).toBeGreaterThan(0);
+  rejectSlow(new Error("来源超时"));
+  const result = await pending;
+  expect(progress).toHaveBeenCalledTimes(2);
+  expect(progress.mock.calls[1][0]).toMatchObject({ config: { id: "slow" }, completed: 2, total: 2, failure: { message: "来源超时" } });
+  expect(result.candidates.length).toBeGreaterThan(0);
+  expect(result.failures).toHaveLength(1);
+});
+
+it("never automatically substitutes a cached side story when the original novel was requested", async () => {
+  const provider = providerFixture();
+  provider.supportedTypes.splice(0, 1, "novel");
+  vi.mocked(provider.search).mockResolvedValue([{ sourceId: "lnovel", sourceItemId: "side", title: "无职转生 ～蛇足篇～" }]);
+  const config = { ...source, type: "lnovel" as const };
+  const direct = await searchSourceCandidates({ keyword: "无职转生", mediaType: "novel", sources: [config] }, () => provider);
+  expect(direct.candidates).toHaveLength(1);
+  const automatic = await discoverResources({ keyword: "无职转生", mediaType: "novel", sources: [config] }, () => provider);
+  expect(automatic.items).toEqual([]);
+  expect(automatic.failures[0].message).toContain("未将它当作正篇");
+  expect(provider.listResources).not.toHaveBeenCalled();
+  const explicit = await discoverResources({ keyword: "无职转生 蛇足篇", mediaType: "novel", sources: [config] }, () => provider);
+  expect(explicit.items).toHaveLength(1);
+});
+
 it("keeps a shared official page for distinct trial, full and platform releases through discovery", async () => {
   const provider = providerFixture();
   provider.supportedTypes.splice(0, 1, "visual_novel");

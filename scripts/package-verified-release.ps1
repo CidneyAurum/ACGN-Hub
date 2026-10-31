@@ -79,11 +79,12 @@ for ($index = 0; $index -lt $expectedPaths.Count; $index++) {
 }
 $notesName = ConvertFrom-Utf8Base64 '5L2/55So6K+05piOLm1k'
 $launcherName = 'START-PORTABLE.cmd'
+$portableMarkerName = 'ACGN-HUB-PORTABLE'
 $noticeFiles = @('THIRD_PARTY_NOTICES.md', 'third_party/aria2/COPYING', 'third_party/aria2/AUTHORS', 'third_party/aria2/README.mingw', 'third_party/aria2/LICENSE.OpenSSL')
 foreach ($name in $noticeFiles) {
     if (-not (Test-Path -LiteralPath (Join-Path $taskRoot $name) -PathType Leaf)) { throw "Third-party notice source is missing: $name" }
 }
-$supportNames = @($launcherName, $notesName) + $noticeFiles
+$supportNames = @($launcherName, $portableMarkerName, $notesName) + $noticeFiles
 foreach ($name in @($names) + $supportNames) { Assert-ReplaceableFile $name }
 $checksumPath = Join-Path $release 'SHA256SUMS.txt'
 if (Test-Path -LiteralPath $checksumPath) {
@@ -108,11 +109,23 @@ if (Test-Path -LiteralPath $versionGuide -PathType Leaf) {
 }
 $launcher = @(
     '@echo off',
-    'setlocal',
-    'cd /d "%~dp0"',
+    'setlocal DisableDelayedExpansion',
+    ('if not exist "%~dp0' + $names[0] + '" goto :missing'),
     'set "ACGN_HUB_DATA_DIR=%~dp0Data"',
-    ('start "" "%~dp0' + $names[0] + '"'),
-    'endlocal'
+    'if not exist "%ACGN_HUB_DATA_DIR%\" mkdir "%ACGN_HUB_DATA_DIR%"',
+    'if not exist "%ACGN_HUB_DATA_DIR%\" goto :unwritable',
+    ('start "" /D "%~dp0" "%~dp0' + $names[0] + '"'),
+    'if errorlevel 1 goto :failed',
+    'exit /b 0',
+    ':missing',
+    'echo Application file is missing. Extract the complete portable ZIP first.',
+    'goto :failed',
+    ':unwritable',
+    'echo The Data folder cannot be created. Move the portable folder to a writable drive.',
+    ':failed',
+    'echo ACGN Hub could not start. Windows x64 and Microsoft Edge WebView2 Runtime are required.',
+    'pause',
+    'exit /b 1'
 ) -join "`r`n"
 $launcher += "`r`n"
 
@@ -130,6 +143,7 @@ for ($index = 0; $index -lt $names.Count; $index++) {
     $artifacts += [ordered]@{ file = $names[$index]; sizeBytes = (Get-Item -LiteralPath $destination).Length; sha256 = $scan.sha256 }
 }
 [IO.File]::WriteAllText((Join-Path $release $launcherName), $launcher, [Text.Encoding]::ASCII)
+[IO.File]::WriteAllText((Join-Path $release $portableMarkerName), "ACGN Hub portable profile v1`n", [Text.Encoding]::ASCII)
 [IO.File]::WriteAllText((Join-Path $release $notesName), $notes, $utf8)
 foreach ($name in $noticeFiles) {
     $destination = Join-Path $release $name
@@ -145,7 +159,7 @@ $manifest = [ordered]@{
     product = $productName
     version = $version
     platform = 'Windows x64'
-    releaseScope = if ($version -eq '0.3.9') { 'v039 warm television branding across native icons, sidebar and favicon; existing v038 features retained' } elseif ($version -eq '0.3.8') { 'v038 Shinnku game archive downloads, Shionlib version catalog, multi-source discovery, combined game filters, version-scoped batches and isolated split-archive directories' } elseif ($version -eq '0.3.7') { 'v037 live VNDB Galgame discovery, official release/trial sources, curated verified game entries, KUN alias and pagination fixes; v036 local viewing and unified author search retained' } elseif ($version -eq '0.3.6') { 'v036 in-app comic/novel/video viewing, continuous/fullscreen reading, per-work continuation, manga edition selection and official Bangumi author search' } else { 'v035 real book discovery, unified bookmark-star branding, source curation and workflow fixes; naming and BT reliability retained' }
+    releaseScope = if ($version -eq '0.4.0') { 'v040 verified novel free-text sources and author matching, original-language Galgame archives, incremental source search, relocatable portable profiles and filesystem-compatible output publication' } elseif ($version -eq '0.3.9') { 'v039 warm television branding across native icons, sidebar and favicon; existing v038 features retained' } elseif ($version -eq '0.3.8') { 'v038 Shinnku game archive downloads, Shionlib version catalog, multi-source discovery, combined game filters, version-scoped batches and isolated split-archive directories' } elseif ($version -eq '0.3.7') { 'v037 live VNDB Galgame discovery, official release/trial sources, curated verified game entries, KUN alias and pagination fixes; v036 local viewing and unified author search retained' } elseif ($version -eq '0.3.6') { 'v036 in-app comic/novel/video viewing, continuous/fullscreen reading, per-work continuation, manga edition selection and official Bangumi author search' } else { 'v035 real book discovery, unified bookmark-star branding, source curation and workflow fixes; naming and BT reliability retained' }
     sourceRepository = 'https://github.com/CidneyAurum/ACGN-Hub'
     thirdPartyNotices = $noticeFiles
     bookDiscovery = [ordered]@{
@@ -185,7 +199,7 @@ $manifest = [ordered]@{
         pathHandling = 'native canonical checks within task or explicitly configured roots; no arbitrary parent allowance'
     }
     inAppViewer = [ordered]@{
-        available = (@('0.3.6', '0.3.7', '0.3.8', '0.3.9') -contains $version)
+        available = ([version]($version.Split('-')[0].Split('+')[0]) -ge [version]'0.3.6')
         comics = 'read-only CBZ pages; default continuous scroll or single-page mode, bounded nearby images, natural filename order, page jump, arrow keys, fullscreen toolbar/navigation and saved position'
         novels = 'UTF-8 TXT with optional BOM; plain-text chapter navigation, font size, line height, paper themes, reading width and saved scroll position'
         video = 'WebView2 media controls; bounded Range reads and saved playback position; codecs depend on the system'
@@ -218,6 +232,15 @@ $manifest = [ordered]@{
     installer = $names[1]
     portableLauncher = $launcherName
     portableDataDirectory = 'Data'
+    portableProfile = [ordered]@{
+        marker = $portableMarkerName
+        sameProfileForLauncherAndExecutable = $true
+        relocation = 'only registered paths within the previous Data root; external paths and source credentials retained'
+        state = 'SQLite, WebView2, embedded aria2, image cache, files and reading positions remain in Data'
+        movedActiveDownloads = 'paused at relocated paths; resume explicitly with existing aria2 control files'
+        fileSystems = 'Windows no-replace move removes the NTFS hard-link dependency; physical exFAT is unverified; FAT32 retains its 4 GiB file limit'
+        requirements = 'Windows x64; Microsoft Edge WebView2 Runtime; copy the entire closed application folder including Data'
+    }
     usageGuide = $notesName
     artifacts = $artifacts
     supportFiles = $supportFiles
@@ -246,7 +269,8 @@ $manifest = [ordered]@{
     nativeEvidenceAttached = [bool]$nativeRelativePath
 }
 if ($nativeRelativePath) {
-    if ($version -eq '0.3.9') { $manifest['brandNativeEvidence'] = $nativeRelativePath }
+    if ($version -eq '0.4.0') { $manifest['workflowNativeEvidence'] = $nativeRelativePath }
+    elseif ($version -eq '0.3.9') { $manifest['brandNativeEvidence'] = $nativeRelativePath }
     elseif (@('0.3.7', '0.3.8') -contains $version) { $manifest['galgameNativeEvidence'] = $nativeRelativePath }
     else { $manifest['mangaNativeEvidence'] = $nativeRelativePath }
 }

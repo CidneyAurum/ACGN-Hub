@@ -1,6 +1,20 @@
 use serde_json::Value;
 use sqlx::SqlitePool;
 
+fn sqlite_file_url(path: &std::path::Path) -> Result<String, String> {
+    let path = path
+        .to_str()
+        .ok_or("SQLite 资料库路径不是有效 Unicode，未打开替代资料库")?;
+    // SQLx separates query parameters at '?' and percent-decodes the filename.
+    // Encode literal '%' first so names such as "100%20小说" stay unchanged;
+    // keep Windows drive/UNC separators intact for tauri-plugin-sql's mapper.
+    let encoded = path
+        .replace('%', "%25")
+        .replace('?', "%3F")
+        .replace('#', "%23");
+    Ok(format!("sqlite:{encoded}"))
+}
+
 #[derive(serde::Deserialize)]
 pub struct Statement {
     sql: String,
@@ -13,10 +27,7 @@ pub fn get_database_url() -> Result<String, String> {
     if let Some(path) = crate::runtime::portable_data_directory()? {
         std::fs::create_dir_all(&path)
             .map_err(|error| format!("创建便携资料库目录失败：{error}"))?;
-        Ok(format!(
-            "sqlite:{}",
-            path.join("acgn-hub.db").to_string_lossy()
-        ))
+        sqlite_file_url(&path.join("acgn-hub.db"))
     } else {
         Ok("sqlite:acgn-hub.db".to_string())
     }
@@ -142,6 +153,79 @@ pub async fn database_transaction(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sqlite_file_urls_round_trip_literal_escapes_unicode_and_windows_prefixes() {
+        for filename in [
+            r"D:\100%20小说 #完整\Data\acgn-hub.db",
+            r"D:\literal%FF和%E4\Data\acgn-hub.db",
+            r"\\?\D:\便携%20资料\Data\acgn-hub.db",
+            r"\\server\share\小说%20收藏#1\Data\acgn-hub.db",
+            r"\\?\UNC\server\share\便携%FF\Data\acgn-hub.db",
+        ] {
+            let path = std::path::Path::new(filename);
+            let url = sqlite_file_url(path).unwrap();
+            let options: sqlx::sqlite::SqliteConnectOptions = url.parse().unwrap();
+            assert_eq!(options.get_filename(), path, "{url}");
+            // tauri-plugin-sql appends the URL's path to app_config_dir before
+            // passing it to SQLx. Absolute Windows prefixes must survive that.
+            #[cfg(windows)]
+            {
+                let mut mapped = std::path::PathBuf::from(r"C:\Unrelated\Config");
+                mapped.push(url.strip_prefix("sqlite:").unwrap());
+                let mapped_url = format!("sqlite:{}", mapped.to_str().unwrap());
+                let options: sqlx::sqlite::SqliteConnectOptions = mapped_url.parse().unwrap();
+                assert_eq!(options.get_filename(), path, "{mapped_url}");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn encoded_url_reopens_the_existing_literal_percent_database() {
+        let root = std::env::temp_dir().join(format!(
+            "acgn-sqlite-uri-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let directory = root.join("100%20小说#完整版");
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("acgn-hub.db");
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect_with(
+                sqlx::sqlite::SqliteConnectOptions::new()
+                    .filename(&path)
+                    .create_if_missing(true),
+            )
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE media (id TEXT PRIMARY KEY)")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO media VALUES ('preserved-id')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        pool.close().await;
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect(&sqlite_file_url(&path).unwrap())
+            .await
+            .unwrap();
+        let (id,): (String,) = sqlx::query_as("SELECT id FROM media")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(id, "preserved-id");
+        pool.close().await;
+        assert!(!root.join("100 小说#完整版").exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[tokio::test]
     async fn transaction_rolls_back_all_writes_when_second_statement_fails() {
         let pool = sqlx::sqlite::SqlitePoolOptions::new()

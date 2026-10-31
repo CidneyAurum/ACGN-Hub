@@ -73,7 +73,7 @@ const allSelected = computed(() => downloadableResources.value.length > 0 && sel
 function actionLabel(resource: ResourceItem): string {
   if (resource.metadata.downloadMode === "external_link") return typeof resource.metadata.actionLabel === "string" ? resource.metadata.actionLabel : "打开来源";
   if (resource.metadata.downloadMode === "public_video") return "下载视频";
-  if (resource.metadata.downloadMode === "novel_txt") return "下载本卷";
+  if (resource.metadata.downloadMode === "novel_txt") return resource.metadata.contentScope === "free-chapters-only" ? "下载免费章节" : "下载本卷";
   if (["manga_cbz", "jmcomic_cbz"].includes(String(resource.metadata.downloadMode))) return "下载章节";
   return resource.protocol === "magnet" ? "磁力下载" : resource.protocol === "torrent" ? "种子下载" : "直接下载";
 }
@@ -85,6 +85,9 @@ function resourceChips(resource: ResourceItem): string[] {
   const list = (key: string) => Array.isArray(resource.metadata[key]) ? resource.metadata[key].filter((value): value is string => typeof value === "string").join(" / ") : undefined;
   return [...new Set([label, text("resourceTypeLabel"), ...(props.mediaType === "visual_novel" ? [text("editionLabel"), text("translationLabel"), text("formLabel")] : []), resource.resolution, list("languageLabels") || language, list("platformLabels") || text("platform"), list("runtimeLabels"), resource.format, typeof pages === "number" && pages > 0 ? `${pages} 页` : undefined, resource.sizeBytes ? formatBytes(resource.sizeBytes) : text("size"),
     list("providerNames"),
+    resource.metadata.downloadMode === "novel_txt" && typeof resource.metadata.chapterCount === "number" ? `${resource.metadata.chapterCount} 章正文` : undefined,
+    resource.metadata.downloadMode === "novel_txt" && typeof resource.metadata.restrictedChapterCount === "number" && resource.metadata.restrictedChapterCount > 0 ? `${resource.metadata.restrictedChapterCount} 章受限，不包含` : undefined,
+    resource.metadata.downloadMode === "novel_txt" ? text("contentNote") : undefined,
     resource.protocol === "magnet" ? "Magnet" : resource.protocol === "torrent" ? "Torrent" : undefined].filter((item): item is string => Boolean(item)))];
 }
 function formatBytes(bytes: number): string {

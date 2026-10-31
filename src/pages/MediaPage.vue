@@ -86,6 +86,17 @@ let resourceSearchGeneration = 0;
 const saved = computed(() => Boolean(media.value && library.isSaved(media.value.id)));
 const tracking = computed(() => media.value ? trackingStore.get(media.value) : { status: "wish" as const, episode: 0 });
 const exactSource = computed(() => media.value?.id.startsWith("source:") && typeof media.value.metadata.sourceConfigId === "string" && typeof media.value.metadata.sourceItemId === "string");
+const searchReturnLocation = computed(() => {
+  const current = media.value;
+  if (!exactSource.value || !current) return "/search";
+  const query = typeof current.metadata.sourceQuery === "string" ? current.metadata.sourceQuery.trim() : "";
+  return { path: "/resources", query: {
+    type: current.type,
+    q: query || current.title,
+    sourceId: typeof current.metadata.sourceConfigId === "string" ? current.metadata.sourceConfigId : undefined,
+    provider: typeof current.metadata.sourceType === "string" ? current.metadata.sourceType : undefined,
+  } };
+});
 const metadataEntries = computed(() =>
   Object.entries(media.value?.metadata ?? {}).filter(([key]) => key !== "raw"),
 );
@@ -411,7 +422,7 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
             chapterCount: 0,
           };
       if (!isAbsoluteWindowsPath(settings.obsidianEbookDirectory)) {
-        throw new Error("请先在设置中填写有效的 Obsidian 电子书绝对路径");
+        throw new Error("请先在设置中填写有效的电子书输出目录（绝对路径）");
       }
       const outputPath = joinWindowsPath(settings.obsidianEbookDirectory, `${sanitizeFileName(`${descriptor.title} - ${descriptor.volume}`).slice(0, 165)}.txt`);
       localTaskId = localDownloadStore.create({
@@ -703,7 +714,7 @@ function isAbsoluteWindowsPath(value: string): boolean {
 
 <template>
   <div class="subject-detail-page">
-    <nav class="subject-breadcrumb"><RouterLink :to="exactSource ? '/resources' : '/search'">← {{ exactSource ? '返回资源搜索' : '返回作品搜索' }}</RouterLink><span v-if="media">{{ typeLabel(media.type) }} <i>/</i> {{ media.title }}</span></nav>
+    <nav class="subject-breadcrumb"><RouterLink :to="searchReturnLocation">← {{ exactSource ? '返回资源搜索' : '返回作品搜索' }}</RouterLink><span v-if="media">{{ typeLabel(media.type) }} <i>/</i> {{ media.title }}</span></nav>
     <div v-if="loading && !media" class="subject-loading-shell" role="status"><div></div><section><i></i><i></i><i></i><p>正在打开作品资料…</p></section></div>
     <section v-if="error && !media" class="subject-load-failed" role="alert"><h1>这次没能打开作品</h1><p>{{ error }}</p><div><button type="button" @click="load">重新加载</button><RouterLink to="/resources">从来源查找作品 →</RouterLink></div></section>
     <template v-if="media">

@@ -26,8 +26,9 @@ async function installBooks(page: Page) {
     expect(input.keyword).toBe(""); expect(input.filter.nsfw).toBe(false);
     if (sort === "score") expect(input.filter.rating_count).toEqual([">=50"]);
     const key = `${kind}:${sort}`;
-    const gate = gates.get(key); if (gate) await gate;
-    if (failures.has(key)) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ error: "固定书籍目录暂不可用" }) });
+    const batchKey = `${key}:offset${offset}`;
+    const gate = gates.get(batchKey) ?? gates.get(key); if (gate) await gate;
+    if (failures.has(key) || failures.has(batchKey)) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ error: "固定书籍目录暂不可用" }) });
     const total = 49;
     const base = (kind === "manga" ? 810000 : 820000) + (["heat", "score", "recent"].indexOf(sort) * 1000);
     const data = Array.from({ length: Math.max(0, Math.min(limit, total - offset)) }, (_, index) => {
@@ -139,6 +140,30 @@ test("failed refresh preserves only the matching book cache and an uncached sort
   await expect(novels.locator(".subject-name")).toHaveCount(24);
   await expect(novels.getByRole("link", { name: title("novel", "recent"), exact: true })).toBeVisible();
   await expect(novels.getByRole("heading", { name: /近一年热门/ })).toBeVisible();
+});
+
+test("first novel books render before the last batch and a partial page can be completed before advancing", async ({ page }) => {
+  const network = await installBooks(page);
+  let release!: () => void;
+  network.gates.set("novel:heat:offset8", new Promise<void>((resolve) => { release = resolve; }));
+  await page.goto("/#/?type=novel");
+  const novels = wall(page, "novel");
+  await expect(novels.locator(".subject-name")).toHaveCount(8);
+  await expect(page.getByRole("region", { name: "轻小说精选", exact: true })).toBeVisible();
+  await expect(novels.getByRole("status")).toContainText("已显示首批推荐");
+  network.failures.add("novel:heat:offset8");
+  release(); network.gates.delete("novel:heat:offset8");
+  await expect(page.getByRole("button", { name: "补全本页", exact: true })).toBeEnabled();
+  await expect(novels.locator(".subject-name")).toHaveCount(8);
+  network.failures.delete("novel:heat:offset8");
+  await page.getByRole("button", { name: "补全本页", exact: true }).click();
+  await expect(novels.locator(".subject-name")).toHaveCount(24);
+  await page.getByRole("button", { name: "加载更多轻小说", exact: true }).click();
+  await expect(novels.locator(".subject-name")).toHaveCount(48);
+  expect(await novels.locator(".subject-name").allTextContents()).toEqual(Array.from({ length: 48 }, (_, index) => title("novel", "heat", index + 1)));
+  expect(network.calls.filter((call) => call.kind === "novel").map(({ offset, limit }) => ({ offset, limit }))).toEqual([
+    { offset: 0, limit: 8 }, { offset: 8, limit: 16 }, { offset: 0, limit: 8 }, { offset: 8, limit: 16 }, { offset: 24, limit: 20 }, { offset: 44, limit: 4 },
+  ]);
 });
 
 test("discovery remains usable on a narrow window and past-quarter history follows its URL", async ({ page, mockNetwork }) => {

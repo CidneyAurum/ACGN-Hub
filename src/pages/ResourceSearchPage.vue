@@ -28,6 +28,8 @@ const error = ref("");
 const candidates = ref<SourceCandidate[]>([]);
 const failures = ref<SourceFailure[]>([]);
 const searchedSourceNames = ref<string[]>([]);
+const completedSourceCount = ref(0);
+const searchCancelled = ref(false);
 let requestGeneration = 0;
 let sourceInitializationFinished = false;
 const types: Array<{ value: MediaType; label: string }> = [
@@ -35,7 +37,7 @@ const types: Array<{ value: MediaType; label: string }> = [
   { value: "novel", label: "小说" }, { value: "visual_novel", label: "Galgame" },
 ];
 const compatibleSources = computed(() => [...sources.configs, ...DEFAULT_RESOURCE_SOURCE_CONFIGS.filter((preset) =>
-  (preset.type === "vndb_release" || sourceSupportsType(preset, "visual_novel") && preset.type !== "rss") &&
+  (preset.type === "vndb_release" || sourceSupportsType(preset, "visual_novel") && preset.type !== "rss" || preset.type === "lnovel") &&
   !sources.configs.some((config) => config.id === preset.id || config.type === preset.type && config.url.replace(/\/+$/, "") === preset.url.replace(/\/+$/, "")))].filter((config) => sourceSupportsType(config, type.value))
   .sort((left, right) => Number(right.enabled) - Number(left.enabled) || getSourcePriority(left, type.value) - getSourcePriority(right, type.value)));
 const selectedSource = computed(() => compatibleSources.value.find((source) => source.id === selectedSourceId.value));
@@ -71,6 +73,12 @@ onUnmounted(() => { requestGeneration += 1; });
 function invalidateSearch(): void {
   requestGeneration += 1; loading.value = false; searched.value = false;
   candidates.value = []; failures.value = []; error.value = ""; selecting.value = ""; searchedSourceNames.value = [];
+  completedSourceCount.value = 0; searchCancelled.value = false;
+}
+function cancelSearch(): void {
+  requestGeneration += 1;
+  loading.value = false;
+  searchCancelled.value = true;
 }
 watch(type, () => { invalidateSearch(); chooseDefaultSource(); });
 watch(selectedSourceId, invalidateSearch);
@@ -138,6 +146,7 @@ async function search(): Promise<void> {
   const requestedKeyword = keyword.value.trim();
   const generation = ++requestGeneration;
   loading.value = true; searched.value = true; candidates.value = []; failures.value = [];
+  completedSourceCount.value = 0; searchCancelled.value = false;
   try {
     let enabled = source;
     if (!allSources && source && !source.enabled) {
@@ -147,7 +156,14 @@ async function search(): Promise<void> {
     if (generation !== requestGeneration) return;
     const searchSources = allSources ? [...enabledSources.value] : enabled ? [enabled] : [];
     searchedSourceNames.value = searchSources.map((config) => config.name);
-    const result = await searchSourceCandidates({ keyword: requestedKeyword, mediaType: requestedType, sources: searchSources });
+    const result = await searchSourceCandidates({ keyword: requestedKeyword, mediaType: requestedType, sources: searchSources,
+      onSourceResult: (progress) => {
+        if (generation !== requestGeneration) return;
+        completedSourceCount.value = progress.completed;
+        candidates.value = [...candidates.value, ...progress.candidates].sort((left, right) => right.score - left.score);
+        if (progress.failure) failures.value = [...failures.value, progress.failure];
+      },
+    });
     if (generation !== requestGeneration) return;
     candidates.value = [...result.candidates].sort((left, right) => right.score - left.score); failures.value = result.failures;
   } catch (cause) { if (generation === requestGeneration) error.value = cause instanceof Error ? cause.message : "来源暂时不可用，请换一个来源重试"; }
@@ -197,16 +213,17 @@ function candidateKey(choice: SourceCandidate): string { return `${choice.config
       <label class="resource-keyword"><span>作品名称 / 来源作品 ID</span><input v-model="keyword" type="search" placeholder="例如：葬送的芙莉莲、我想成为影之强者" autocomplete="off" /></label>
       <label class="resource-source"><span>检索来源</span><select v-model="selectedSourceId"><option value="all">全部已启用来源（{{ enabledSources.length }}）</option><option v-if="!compatibleSources.length" value="">暂无适用来源</option><option v-for="source in compatibleSources" :key="source.id" :value="source.id">{{ source.name }}{{ source.enabled ? '' : ' · 未启用' }}</option></select></label>
       <button class="primary-button" :disabled="loading || sources.loading" type="submit">{{ loading ? '正在检索…' : selectedSource && !selectedSource.enabled ? '启用此来源并搜索' : '搜索来源' }}</button>
+      <button v-if="loading" class="ghost-button" type="button" @click="cancelSearch">停止等待</button>
     </form>
     <SourceGuide v-if="selectedSource" :config="selectedSource" compact />
     <p v-if="searchingAll && !searched" class="resource-source-note">{{ enabledSources.length ? `将同时查询：${enabledSources.map((source) => source.name).join('、')}。各来源的作品与版本分别保留。` : '当前没有已启用来源。可以在上方选择一个来源，明确启用后检索。' }}</p>
-    <p v-if="searchedSourceNames.length" class="resource-search-sources" role="status">{{ loading ? '正在查询' : '本次检索' }}：{{ searchedSourceNames.join('、') }}<span v-if="searchingAll && !loading"> · 各来源结果分别确认</span></p>
+    <p v-if="searchedSourceNames.length" class="resource-search-sources" role="status">{{ loading ? '正在查询' : '本次检索' }}：{{ searchedSourceNames.join('、') }}<span v-if="loading"> · 已返回 {{ completedSourceCount }} / {{ searchedSourceNames.length }}，可先查看已有结果</span><span v-else-if="searchCancelled"> · 已停止等待，保留已返回结果</span><span v-else-if="searchingAll"> · 各来源结果分别确认</span></p>
     <p v-if="selectedSource?.type === 'kungal'" class="resource-source-note">公开检索无需账号。资源条目会打开原站分享页，外链的访问权限与获取方式请在原站确认。<a :href="selectedSource.url" target="_blank" rel="noopener noreferrer" @click.prevent="openSourceWebsite">打开来源网站 ↗</a></p>
     <p v-if="selectedSource?.type === 'public_video'" class="resource-source-note">如遇搜索验证，可在官网找到投稿后复制 BV 号或链接回到此处。<a :href="publicSearchUrl" target="_blank" rel="noopener noreferrer" @click.prevent="openPublicSearch">B站官方搜索 ↗</a></p>
     <p v-if="error || sources.error" class="error-message" role="alert">{{ error || sources.error }}</p>
     <p v-for="failure in failures" :key="failure.config.id" class="error-message" role="alert">{{ failure.config.name }}：{{ failure.message }}</p>
   </section>
-  <section v-if="loading" class="resource-state" role="status"><span class="loading-spinner"></span><h2>正在读取来源目录</h2><p>只查询作品列表；确认作品后才会加载章节。</p></section>
+  <section v-if="loading && !candidates.length" class="resource-state" role="status"><span class="loading-spinner"></span><h2>正在读取来源目录</h2><p>只查询作品列表；确认作品后才会加载章节。</p></section>
   <section v-else-if="searched && !candidates.length && !failures.length && !error" class="resource-state"><h2>{{ searchingAll ? '已启用来源中没有找到对应作品' : '这个来源没有找到对应作品' }}</h2><p>试试中文系列名、原名或更短的关键词，也可以换一个来源。</p></section>
   <section v-else-if="!searched" class="resource-state"><span class="resource-state-symbol">✦</span><h2>不必先找到元数据条目</h2><p>小说、漫画和动画都可以直接查来源。选择原作，避免把同人、番外或另一季当成目标作品。</p></section>
   <section v-if="candidates.length" aria-label="来源作品候选">

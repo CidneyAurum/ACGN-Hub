@@ -62,13 +62,13 @@ onBeforeUnmount(() => {
 function localDate(): string { const now = new Date(); return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`; }
 function onVisibilityChange(): void { if (!document.hidden) refreshIfDue(); }
 function onOnline(): void {
-  if (!loading.value && (!result.value || result.value.stale)) void load(true);
+  if (!loading.value && (!result.value || result.value.stale || result.value.partial)) void load(true);
   else refreshIfDue();
 }
 function refreshIfDue(): void {
   if (disposed || loading.value || document.hidden || Date.now() - lastAttemptAt < 60_000) return;
   const dateChanged = props.sort === "recent" && localDate() !== lastDate;
-  const expired = !result.value || Date.now() - Date.parse(result.value.updatedAt) >= 30 * 60_000;
+  const expired = !result.value || result.value.partial || Date.now() - Date.parse(result.value.updatedAt) >= 30 * 60_000;
   if (dateChanged || expired) void load(true);
 }
 
@@ -77,16 +77,20 @@ async function load(refresh = false, append = false): Promise<void> {
   const request = ++generation;
   controller?.abort(); controller = new AbortController();
   const { type, sort } = props;
-  const page = append ? (result.value?.page ?? 0) + 1 : 1;
+  const page = append ? result.value?.partial ? result.value.page : (result.value?.page ?? 0) + 1 : 1;
+  const previousItems = append ? [...items.value] : [];
   loading.value = true; error.value = ""; retryAppend.value = append;
   lastAttemptAt = Date.now(); lastDate = localDate();
-  try {
-    const next = await getBookDiscovery(type, { sort, page, refresh, signal: controller.signal });
+  const showResult = (next: BookDiscoveryResult) => {
     if (disposed || request !== generation || type !== props.type || sort !== props.sort) return;
-    items.value = [...new Map([...(append ? items.value : []), ...next.items].map((media) => [media.id, media])).values()];
+    items.value = [...new Map([...previousItems, ...next.items].map((media) => [media.id, media])).values()];
     result.value = next;
     if (!append) picked.value = 0;
     session.remember(next.items.map((media) => ({ media, score: 100, reason: "exact" as const })));
+  };
+  try {
+    const next = await getBookDiscovery(type, { sort, page, refresh, signal: controller.signal, onProgress: showResult });
+    showResult(next);
   } catch (cause) {
     if (!disposed && request === generation && !controller.signal.aborted) {
       error.value = cause instanceof Error ? cause.message : "推荐目录暂时未能加载，请稍后重试。";
@@ -125,13 +129,14 @@ function tags(media: Media): string[] {
 
     <section class="book-catalog" :aria-label="typeName + '推荐封面墙'">
       <header class="book-section-heading"><div><p class="book-kicker">THE READING LIST</p><h2>{{ currentSort.label }}<small>{{ currentSort.description }}</small></h2></div><div class="book-catalog-actions"><label><span class="sr-only">{{ typeName }}推荐排序</span><select :aria-label="typeName + '推荐排序'" :value="sort" @change="changeSort"><option v-for="option in sortOptions" :key="option.value" :value="option.value">{{ option.label }}</option></select></label><button class="book-refresh" type="button" :disabled="loading" :aria-label="'刷新' + typeName + '推荐'" @click="load(true)"><AppIcon name="refresh" :size="15" />{{ loading ? '更新中' : '刷新' }}</button></div></header>
-      <p v-if="result?.stale" class="book-notice" role="status">网络暂不可用，正在显示已保存的{{ typeName }}目录。更新于 {{ new Date(result.updatedAt).toLocaleString() }}。</p>
+      <p v-if="loading && items.length" class="book-notice" role="status">{{ result?.cached ? '已显示保存的目录，正在更新推荐。' : '已显示首批推荐，正在补全这一页。' }}</p>
+      <p v-else-if="result?.stale" class="book-notice" role="status">网络暂不可用，正在显示已保存的{{ typeName }}目录。更新于 {{ new Date(result.updatedAt).toLocaleString() }}。</p>
       <p v-else-if="result?.warning" class="book-notice" role="status">{{ result.warning }}</p>
       <p v-if="error && items.length" class="book-error" role="alert">{{ error }}<button type="button" :disabled="loading" @click="load(false, retryAppend)">重试</button></p>
       <div v-if="loading && !items.length" class="book-wall" aria-hidden="true"><div v-for="number in 12" :key="number" class="book-poster-skeleton"></div></div>
       <div v-else-if="items.length" class="book-wall"><MediaCard v-for="media in items" :key="media.id" :media="media" :saved="isSaved(media.id)" @toggle-save="emit('toggle-save', $event)" /></div>
       <div v-else class="book-empty"><AppIcon :name="error ? 'warning' : 'manga'" :size="30" /><h3>{{ error ? typeName + '推荐暂时未能加载' : '这个分类暂时没有作品' }}</h3><p>{{ error || '试试其它排序，也可以搜索你想看的作品。' }}</p><div><button type="button" class="book-open" @click="load(true)">重新加载</button><RouterLink :to="{ path: '/search', query: { type } }">搜索{{ typeName }} →</RouterLink></div></div>
-      <footer v-if="result && items.length" class="book-catalog-footer"><p>Bangumi 作品资料<span>已显示 {{ items.length }} 部</span><time :datetime="result.updatedAt">更新于 {{ new Date(result.updatedAt).toLocaleString() }}{{ result.cached ? ' · 缓存' : '' }}</time></p><button v-if="result.hasMore" type="button" class="book-more" :disabled="loading" @click="load(false, true)">{{ loading ? '正在加载…' : '加载更多' + typeName }}<AppIcon name="arrow" :size="15" /></button><span v-else class="book-end">这一页的故事，慢慢挑。</span></footer>
+      <footer v-if="result && items.length" class="book-catalog-footer"><p>Bangumi 作品资料<span>已显示 {{ items.length }} 部</span><time :datetime="result.updatedAt">更新于 {{ new Date(result.updatedAt).toLocaleString() }}{{ result.cached ? ' · 缓存' : '' }}</time></p><button v-if="result.hasMore || result.partial" type="button" class="book-more" :disabled="loading" @click="load(false, true)">{{ loading ? '正在加载…' : result.partial ? '补全本页' : '加载更多' + typeName }}<AppIcon name="arrow" :size="15" /></button><span v-else class="book-end">这一页的故事，慢慢挑。</span></footer>
     </section>
 
     <section v-if="saved.length" class="book-shelf" :aria-label="'已收藏的' + typeName"><header class="book-section-heading"><div><p class="book-kicker">YOUR BOOKSHELF</p><h2>接着读，故事还在这里<small>已收藏的{{ typeName }}</small></h2></div><RouterLink :to="{ path: '/library', query: { type } }">查看书架 <AppIcon name="arrow" :size="15" /></RouterLink></header><div class="book-wall"><MediaCard v-for="media in saved.slice(0, 6)" :key="media.id" :media="media" :saved="true" @toggle-save="emit('toggle-save', $event)" /></div></section>

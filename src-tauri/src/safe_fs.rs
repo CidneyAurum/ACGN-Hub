@@ -22,6 +22,9 @@ pub fn has_parent_component(path: &Path) -> bool {
 
 fn normalized(path: &Path) -> String {
     let value = path.to_string_lossy().replace('/', "\\").to_lowercase();
+    if let Some(tail) = value.strip_prefix(r"\\?\unc\") {
+        return format!(r"\\{}", tail.trim_end_matches(['\\', '.']));
+    }
     value
         .strip_prefix(r"\\?\")
         .unwrap_or(&value)
@@ -175,7 +178,8 @@ pub fn output_path(root: &str, output: &str, extension: &str) -> Result<PathBuf,
     Ok(parent.join(output.file_name().ok_or("输出文件名无效")?))
 }
 
-/// Publish a complete file with an atomic, no-overwrite hard link on the same volume.
+/// Publish a complete file atomically without replacing an existing destination.
+/// Windows uses a same-volume move, which also supports exFAT/FAT32 portable drives.
 /// A failed operation only removes the private staging file.
 pub struct AtomicOutput {
     path: PathBuf,
@@ -215,11 +219,36 @@ impl AtomicOutput {
         file.sync_all()
             .map_err(|error| format!("刷新输出文件失败：{error}"))?;
         drop(file);
-        fs::hard_link(&self.staging, &self.path).map_err(|error| {
-            format!("发布输出文件失败（目标已存在或文件系统不支持安全发布）：{error}")
-        })?;
+        publish_no_replace(&self.staging, &self.path)
+            .map_err(|error| format!("发布输出文件失败（目标已存在或目录不可写）：{error}"))?;
         Ok(())
     }
+}
+
+#[cfg(windows)]
+fn publish_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn MoveFileExW(existing: *const u16, destination: *const u16, flags: u32) -> i32;
+    }
+    let source: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
+    let destination: Vec<u16> = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    // MOVEFILE_WRITE_THROUGH only. Deliberately omit REPLACE_EXISTING and
+    // COPY_ALLOWED: staging is on the same volume, and collisions must fail.
+    if unsafe { MoveFileExW(source.as_ptr(), destination.as_ptr(), 0x8) } == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn publish_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    fs::hard_link(source, destination)
 }
 
 impl Drop for AtomicOutput {
@@ -249,6 +278,14 @@ pub fn move_file_no_replace(source: &Path, destination: &Path) -> Result<(), Str
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn canonical_unc_children_match_normal_share_roots_without_matching_siblings() {
+        let root = Path::new(r"\\server\share\轻小说");
+        assert!(is_path_within(root, Path::new(r"\\?\UNC\server\share\轻小说\第一卷.txt")));
+        assert!(is_path_within(Path::new(r"\\?\UNC\server\share\轻小说"), Path::new(r"\\server\share\轻小说\第一卷.txt")));
+        assert!(!is_path_within(root, Path::new(r"\\?\UNC\server\share\轻小说备份\第一卷.txt")));
+        assert!(!is_path_within(root, Path::new(r"\\?\UNC\server\other\轻小说\第一卷.txt")));
+    }
     use super::*;
     fn temporary() -> PathBuf {
         let path = std::env::temp_dir().join(format!(
@@ -323,6 +360,30 @@ mod tests {
         assert!(!target.exists());
         output.publish(file).unwrap();
         assert_eq!(fs::read(target).unwrap(), b"complete");
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn atomic_publish_preserves_readonly_collision_and_supports_unicode_names() {
+        let root = temporary();
+        let target = root.join("轻小说 完整版.txt");
+        fs::write(&target, b"keep existing").unwrap();
+        let mut permissions = fs::metadata(&target).unwrap().permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&target, permissions.clone()).unwrap();
+        let mut output = AtomicOutput::new(target.clone()).unwrap();
+        let mut file = output.take_file();
+        file.write_all(b"replacement").unwrap();
+        assert!(output.publish(file).is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"keep existing");
+        permissions.set_readonly(false);
+        fs::set_permissions(&target, permissions).unwrap();
+        fs::remove_file(&target).unwrap();
+        let mut output = AtomicOutput::new(target.clone()).unwrap();
+        let mut file = output.take_file();
+        file.write_all(b"complete unicode output").unwrap();
+        output.publish(file).unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"complete unicode output");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
         fs::remove_dir_all(root).unwrap();
     }
     #[test]

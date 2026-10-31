@@ -68,6 +68,17 @@ describe("VNDB official distribution and trial source", () => {
     expect(fetcher).toHaveBeenCalledTimes(1); expect(fetcher.mock.calls[0][0]).toBe("https://api.vndb.org/kana/release");
   });
 
+  it.each(["v20424", "https://vndb.org/v20424", "https://vndb.org/v20424/"])("looks up a canonical VNDB identity directly: %s", async (keyword) => {
+    const fetcher = vi.fn<JsonFetcher>().mockResolvedValue(json(200, { results: [game, { ...game, id: "v4" }] }));
+    const source = provider(fetcher);
+    const found = await source.search({ ...query, keyword, aliases: ["Other"] });
+    expect(found.map((item) => item.sourceItemId)).toEqual(["v20424"]);
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(fetcher.mock.calls[0][1].body))).toEqual({ filters: ["id", "=", "v20424"], fields: expect.any(String), results: 1, page: 1 });
+    await expect(source.search({ ...query, keyword, page: 2 })).resolves.toEqual([]);
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it("rejects tracking/wiki/archive/forum/share URLs and mismatched store hosts without losing valid links", async () => {
     const urls = [
       { url: "https://evil.example/store/", name: "steam", label: "Steam" },

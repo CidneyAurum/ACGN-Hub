@@ -40,7 +40,7 @@ async function downloadOriginal(): Promise<void> {
   <section class="gal-resource-guide" aria-label="Galgame 资源入口">
     <header><div><p class="guide-kicker">FIND YOUR NEXT GAME</p><h2>找到完整游戏，再选择版本</h2><p>先找中文本体，按 Windows、语言和下载方式筛选；补丁、试玩与其它平台版本单独查看。</p></div><RouterLink to="/games">管理本地游戏 →</RouterLink></header>
     <div class="gal-source-paths">
-      <RouterLink :to="{ path: '/resources', query: { type: 'visual_novel', provider: 'shinnku' } }"><span>01 / 文件下载</span><h3>真红小站</h3><p>检索原站完整游戏归档，中文 Windows 版本优先。查看容量、压缩格式和分卷后，加入内置下载。</p><strong>找游戏文件 ↗</strong></RouterLink>
+      <RouterLink :to="{ path: '/resources', query: { type: 'visual_novel', provider: 'shinnku' } }"><span>01 / 文件下载</span><h3>真红小站</h3><p>同时检索中文与原文合集，中文 Windows 版本优先。保留高清版、Steam 版与分卷信息，确认语言后加入内置下载。</p><strong>找游戏文件 ↗</strong></RouterLink>
       <RouterLink :to="{ path: '/resources', query: { type: 'visual_novel', provider: 'shionlib' } }"><span>02 / 多版本资源库</span><h3>ShionLib</h3><p>对比汉化组、官方中文、免安装版与文件清单。带原站哈希信息，完成原站验证后获取链接。</p><strong>比较完整版本 ↗</strong></RouterLink>
       <RouterLink :to="{ path: '/resources', query: { type: 'visual_novel', provider: 'kungal' } }"><span>03 / 社区补充</span><h3>鲲 Galgame</h3><p>补充不同平台、汉化组与网盘发布。先核对游戏本体，避免只下载到补丁或原声。</p><strong>查社区资源 ↗</strong></RouterLink>
     </div>

@@ -6,7 +6,8 @@ import type { ResourceItem } from "@/domain/resource";
 import { abortableRequest } from "@/infrastructure/metadata/abortable-request";
 import { createJsonFetcher, type JsonFetcher } from "@/infrastructure/metadata/json-transport";
 import { isTimeoutError } from "@/infrastructure/metadata/response-errors";
-import { normalizeSourceTitle, sourceSearchTerms } from "./source-matching";
+import { sourceSearchTerms } from "./source-matching";
+import { matchesGalgameTitle } from "./galgame-title-matching";
 
 const BASE_URL = "https://shionlib.com";
 const positiveId = z.number().int().positive().safe();
@@ -44,7 +45,7 @@ const TRANSLATION_LABELS: Record<string, string> = { none: "原文", official: "
 const FORM_LABELS: Record<string, string> = { disc: "光盘映像", installer: "安装版", portable: "免安装" };
 const EDITION_LABELS: Record<string, string> = { download: "下载版", package: "光盘版", steam: "Steam 版" };
 
-export interface ShionlibSourceProviderOptions { fetcher?: JsonFetcher; timeoutMs?: number }
+export interface ShionlibSourceProviderOptions { fetcher?: JsonFetcher; timeoutMs?: number; signal?: AbortSignal }
 
 /** Independently implemented client for Shionlib's public catalog contract.
  * Download links require the source site's Cap verification. This provider never
@@ -57,6 +58,7 @@ export class ShionlibSourceProvider implements SourceProvider {
   readonly supportedTypes: MediaType[] = ["visual_novel"];
   private readonly fetcher: JsonFetcher;
   private readonly timeoutMs: number;
+  private readonly signal?: AbortSignal;
   private readonly games = new Map<string, Game>();
   private readonly resources = new Map<string, ResourceItem>();
 
@@ -68,6 +70,7 @@ export class ShionlibSourceProvider implements SourceProvider {
     }
     this.fetcher = options.fetcher ?? createJsonFetcher();
     this.timeoutMs = Number.isFinite(options.timeoutMs) ? Math.min(35_000, Math.max(500, options.timeoutMs!)) : 12_000;
+    this.signal = options.signal;
   }
 
   async search(query: SourceSearchQuery): Promise<SourceSearchResult[]> {
@@ -81,16 +84,15 @@ export class ShionlibSourceProvider implements SourceProvider {
     if (!Number.isSafeInteger(page) || page < 1 || page > 200) throw new Error("Shionlib 搜索页码无效");
     const exactVndb = /^(?:vid:)?v[1-9]\d*$/i.test(keyword);
     const responses = await Promise.allSettled((exactVndb ? [keyword] : terms).map((term) => this.searchGames(term, page)));
+    this.signal?.throwIfAborted();
     const successful = responses.filter((result) => result.status === "fulfilled");
     if (!successful.length) {
       const cause = responses.find((result) => result.status === "rejected")?.reason;
       throw cause instanceof Error ? cause : new Error("Shionlib 公开资源目录搜索失败");
     }
-    const normalizedTerms = terms.map(normalizeSourceTitle).filter(Boolean);
     const games = new Map<string, Game>();
     for (const response of successful) for (const game of response.value) {
-      const names = gameAliases(game).map(normalizeSourceTitle);
-      if (exactVndb || normalizedTerms.some((term) => names.some((name) => name === term || (term.length >= 3 && name.includes(term))))) {
+      if (exactVndb || matchesGalgameTitle(terms, gameAliases(game))) {
         games.set(String(game.id), game);
       }
     }
@@ -236,7 +238,9 @@ export class ShionlibSourceProvider implements SourceProvider {
   }
 
   private async request(path: string): Promise<unknown> {
-    const signal = AbortSignal.timeout(this.timeoutMs);
+    this.signal?.throwIfAborted();
+    const timed = AbortSignal.timeout(this.timeoutMs);
+    const signal = this.signal ? AbortSignal.any([this.signal, timed]) : timed;
     try {
       const response = await abortableRequest(() => this.fetcher(`${BASE_URL}${path}`, {
         method: "GET", headers: { Accept: "application/json" }, credentials: "omit", signal, timeoutMs: this.timeoutMs,
@@ -248,7 +252,8 @@ export class ShionlibSourceProvider implements SourceProvider {
       if (envelope.data.code !== 0) throw new Error(`Shionlib 公开接口暂不可用（错误码 ${envelope.data.code}），请打开原站确认`);
       return envelope.data.data;
     } catch (cause) {
-      if (signal.aborted || isTimeoutError(cause)) throw new Error("Shionlib 目录请求超时，请稍后重试");
+      this.signal?.throwIfAborted();
+      if (timed.aborted || isTimeoutError(cause)) throw new Error("Shionlib 目录请求超时，请稍后重试");
       if (cause instanceof Error && cause.message.startsWith("Shionlib ")) throw cause;
       if (cause instanceof SyntaxError) throw new Error("Shionlib 公开接口返回了无效 JSON，请稍后重试");
       throw new Error("无法连接 Shionlib 公开目录，请检查网络后重试");

@@ -21,7 +21,7 @@ export interface SourceUsage {
 }
 
 const capabilities: Record<string, SourceCapability> = {
-  shinnku: { label: "真红小站", supportedTypes: ["visual_novel"], mode: "direct", setup: "none", requiresDesktop: true, description: "匿名检索原站文件目录，中文 Windows 归档优先；游戏本体与补丁分别标注。文件交给内置下载器，容量与分卷以原站列表为准，下载后需要自行解压。" },
+  shinnku: { label: "真红小站", supportedTypes: ["visual_novel"], mode: "direct", setup: "none", requiresDesktop: true, description: "检索中文目录与原文合集，中文 Windows 版优先；原文语言按文件注明，游戏本体与补丁分别标注。文件交给内置下载器，容量与分卷以原站列表为准，下载后需要自行解压。" },
   shionlib: { label: "ShionLib", supportedTypes: ["visual_novel"], mode: "index", setup: "none", requiresDesktop: false, description: "按作品查看完整资源版本、汉化组、语言、平台、容量和原站提供的文件哈希。打开准确资源页，在原站完成验证后获取下载链接；不把验证页作为文件下载。" },
   vndb_release: { label: "VNDB 官方发行参考", supportedTypes: ["visual_novel"], mode: "index", setup: "none", requiresDesktop: false, description: "从 VNDB 实时读取官方发行记录，中文完整版优先。作为官网与商店版本参考，试玩、完整版本和补丁分别标注，购买与地区条件以原站为准。" },
   public_video: { label: "公开投稿", supportedTypes: ["anime"], mode: "direct", setup: "python", requiresDesktop: true, description: "公开投稿可能是解说、片段或合集，先核对上传者、时长与集数。选择匿名可读取的实际画质，最高1080p；标题中的4K不代表下载画质。" },
@@ -29,7 +29,7 @@ const capabilities: Record<string, SourceCapability> = {
   mangadex: { label: "MangaDex", supportedTypes: ["manga"], mode: "manga", setup: "none", requiresDesktop: true, description: "多语漫画备用来源，保留原始章节页图。检索到原作不代表该语言有章节，请核对原作、同人和可下章节。" },
   mangabz: { label: "MangaBZ", supportedTypes: ["manga"], mode: "manga", setup: "none", requiresDesktop: true, description: "中文日漫按原站页序生成CBZ，保留原站页图。不同作品覆盖、更新进度和章节完整性需逐项确认。" },
   copymanga: { label: "拷贝漫画", supportedTypes: ["manga"], mode: "manga", setup: "optional-token", requiresDesktop: true, description: "中文漫画公开检索与公开章节可直接使用，按原站图片生成CBZ。实际图像尺寸取决于原站，受限章节再登录。" },
-  lnovel: { label: "LNovel", supportedTypes: ["novel"], mode: "novel", setup: "none", requiresDesktop: true, description: "中文系列目录、分卷与TXT正文，TXT不含插图。首次目录可能较慢，也支持站点作品ID/链接；具体分卷和缺章情况需核对。" },
+  lnovel: { label: "LNovel", supportedTypes: ["novel"], mode: "novel", setup: "none", requiresDesktop: true, description: "中文日轻缓存目录、作者检索与分卷 TXT，TXT 不含插图。缓存未收录时可尝试原站作品 ID 或链接现取；首次请求可能较慢，收录与分卷以来源返回为准。" },
   archive: { label: "Internet Archive", supportedTypes: ["anime", "novel"], mode: "direct", setup: "none", requiresDesktop: true, description: "公开档案中的视频或书籍文件直链，语言和格式依发布者而异。检索会混入同名内容、片段或测试样片，需核对内容与时长。" },
   kungal: { label: "鲲 Galgame", supportedTypes: ["visual_novel"], mode: "index", setup: "none", requiresDesktop: false, description: "通过公开接口匿名检索Galgame作品和资源目录。条目打开原站分享页面；站外分享页不等于文件直链，链接和访问权限仍需在原站核对。" },
   jmcomic: { label: "JMComic", supportedTypes: ["manga"], mode: "manga", setup: "python", requiresDesktop: true, description: "需要桌面端 Python 与 jmcomic 包。" },

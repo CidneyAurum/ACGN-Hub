@@ -207,6 +207,29 @@ describe("Shionlib public resource catalog", () => {
     expect(found).toHaveLength(1);
   });
 
+  it("keeps a two-character CJK work query without accepting embedded short Latin noise", async () => {
+    const narcissu = { ...game, id: 50, title_zh: "水仙 1st & 2nd", title_jp: "ナルキッソス", aliases: ["Narcissu"] };
+    const hair = { ...game, id: 51, title_zh: "", title_jp: "Hair Story", aliases: [] };
+    const air = { ...game, id: 52, title_zh: "", title_jp: "AIR Standard Edition", aliases: [] };
+    const fetcher = vi.fn<JsonFetcher>().mockResolvedValue(catalog([narcissu, hair, air]));
+    const provider = new ShionlibSourceProvider(undefined, { fetcher });
+    expect((await provider.search({ keyword: "水仙", aliases: [], mediaType: "visual_novel" })).map((item) => item.sourceItemId)).toEqual(["50"]);
+    expect((await provider.search({ keyword: "ＡＩＲ", aliases: [], mediaType: "visual_novel" })).map((item) => item.sourceItemId)).toEqual(["52"]);
+  });
+
+  it("honors cancellation before networking and while a native response remains pending", async () => {
+    const cancelled = new AbortController(); cancelled.abort(new DOMException("cancelled", "AbortError"));
+    const fetcher = vi.fn<JsonFetcher>(() => new Promise(() => undefined));
+    await expect(new ShionlibSourceProvider(undefined, { fetcher, signal: cancelled.signal }).search({ keyword: "ATRI", aliases: [], mediaType: "visual_novel" })).rejects.toThrow("cancelled");
+    expect(fetcher).not.toHaveBeenCalled();
+    const active = new AbortController();
+    const pending = new ShionlibSourceProvider(undefined, { fetcher, signal: active.signal }).listResources("37");
+    const rejection = expect(pending).rejects.toThrow("user cancelled");
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+    active.abort(new DOMException("user cancelled", "AbortError"));
+    await rejection;
+  });
+
   it.each([
     [json(429, {}), "请求过于频繁"],
     [json(403, {}), "HTTP 403"],

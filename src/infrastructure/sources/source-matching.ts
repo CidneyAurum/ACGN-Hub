@@ -1,4 +1,5 @@
 import type { SourceSearchResult } from "@/application/source-ports";
+import { matchAuthorName } from "@/domain/author";
 
 // Common title glyph variants; this is a bounded search aid, not a translation engine.
 const glyphs: Record<string, string> = {
@@ -39,14 +40,21 @@ export function sourceSearchTerms(keyword: string, aliases: string[] = [], maxim
   return terms.slice(0, maximum);
 }
 
-export function sourceTitleMatch(title: string, terms: string[], aliases: string[] = []): { score: number; warnings: string[] } {
+export interface SourceMatchOptions {
+  /** Short Chinese/Japanese book and game titles are common; keep feeds unchanged. */
+  allowShortCjk?: boolean;
+  matchAuthors?: boolean;
+}
+
+export function sourceTitleMatch(title: string, terms: string[], aliases: string[] = [], options: SourceMatchOptions = {}): { score: number; warnings: string[] } {
   const queries = terms.map(normalizeSourceTitle).filter(Boolean);
   const names = [title, ...aliases.flatMap((alias) => alias.split(/[,，;；\n]/u))].map(normalizeSourceTitle).filter(Boolean);
   let score = 0;
   for (const query of queries) for (const name of names) {
+    const minimum = options.allowShortCjk && /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]{2,}$/u.test(query) ? 2 : 3;
     if (name === query) score = Math.max(score, 100);
-    else if (Math.min(name.length, query.length) >= 3 && (name.startsWith(query) || query.startsWith(name))) score = Math.max(score, 82);
-    else if (query.length >= 3 && name.includes(query)) score = Math.max(score, 70);
+    else if (Math.min(name.length, query.length) >= minimum && (name.startsWith(query) || query.startsWith(name))) score = Math.max(score, 82);
+    else if (query.length >= minimum && name.includes(query)) score = Math.max(score, 70);
   }
   const warnings: string[] = [];
   const related = /同人|doujin|合集|anthology|作品集|插画集|插畫集|蛇足篇|番外|外传|外傳|短篇集/iu;
@@ -71,11 +79,17 @@ export function sourceCandidateAliases(candidate: SourceSearchResult): string[] 
   return [...new Set(names)];
 }
 
-export function rankSourceCandidates(candidates: SourceSearchResult[], keyword: string, aliases: string[] = [], limit = 12) {
+export function rankSourceCandidates(candidates: SourceSearchResult[], keyword: string, aliases: string[] = [], limit = 12, options: SourceMatchOptions = {}) {
   const terms = sourceSearchTerms(keyword, aliases);
   const unique = new Map<string, SourceSearchResult>();
   for (const candidate of candidates) unique.set(candidate.sourceItemId, candidate);
-  return [...unique.values()].map((candidate) => ({ candidate, ...sourceTitleMatch(candidate.title, terms, sourceCandidateAliases(candidate)) }))
+  return [...unique.values()].map((candidate) => {
+    const match = sourceTitleMatch(candidate.title, terms, sourceCandidateAliases(candidate), options);
+    const author = options.matchAuthors && Array.isArray(candidate.raw?.authors)
+      && candidate.raw.authors.some((name) => typeof name === "string" && normalizeSourceTitle(name).length >= 2
+        && matchAuthorName({ name, aliases: [] }, keyword) === 100);
+    return { candidate, ...match, score: author ? Math.max(match.score, 100) : match.score };
+  })
     .filter(({ score }) => score > 0)
     .sort((left, right) => right.score - left.score || left.candidate.title.localeCompare(right.candidate.title))
     .slice(0, limit);

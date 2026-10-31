@@ -16,6 +16,7 @@ mod manga_downloads;
 mod media_images;
 mod network;
 mod process_runner;
+mod portable_profile;
 mod public_video;
 mod qbittorrent;
 mod runtime;
@@ -1512,6 +1513,8 @@ pub fn run() {
             runtime::aria2_rpc,
             runtime::ensure_local_aria2,
             runtime::get_runtime_defaults,
+            portable_profile::get_portable_profile,
+            portable_profile::relocate_portable_profile,
             qbittorrent::qbittorrent_request,
             metadata_json_request,
             copymanga_login,

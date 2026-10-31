@@ -134,4 +134,54 @@ describe("KUN Galgame public v1 catalog", () => {
     expect(resources[0].metadata.searchTerms).toEqual(expect.stringContaining("kirikiroid2"));
     expect(resources[1].metadata.searchTerms).toEqual(expect.stringContaining("安卓"));
   });
+
+  it("matches short Latin game names at a real token boundary and never joins separate aliases", async () => {
+    const names = [
+      { ...work, id: "1", display_name: "AIR Standard Edition", localized: {} },
+      { ...work, id: "2", display_name: "Hair Story", localized: {} },
+      { ...work, id: "3", display_name: "AB", latin: "CD", localized: {} },
+    ];
+    const fetcher = vi.fn<JsonFetcher>().mockResolvedValue(json(200, { object: "list", items: names }));
+    const provider = new KUNGalgameSourceProvider(undefined, { fetcher });
+    expect((await provider.search({ keyword: "ＡＩＲ", aliases: [], mediaType: "visual_novel" })).map((item) => item.sourceItemId)).toEqual(["1"]);
+    await expect(provider.search({ keyword: "ABCD", aliases: [], mediaType: "visual_novel" })).resolves.toEqual([]);
+  });
+
+  it("does not invalidate an already selected resource when another search finishes", async () => {
+    const fetcher = vi.fn<JsonFetcher>().mockResolvedValueOnce(json(200, work))
+      .mockResolvedValueOnce(json(200, { object: "list", items: [card] }))
+      .mockResolvedValueOnce(json(200, { object: "list", items: [] }));
+    const provider = new KUNGalgameSourceProvider(undefined, { fetcher });
+    const [resource] = await provider.listResources("86");
+    await provider.search({ keyword: "Other", aliases: [], mediaType: "visual_novel" });
+    await expect(provider.resolve(resource.id)).resolves.toMatchObject({ url: resource.targetUrl });
+  });
+
+  it("honors cancellation before networking and while the JSON body remains pending", async () => {
+    const cancelled = new AbortController(); cancelled.abort(new DOMException("cancelled", "AbortError"));
+    const fetcher = vi.fn<JsonFetcher>();
+    await expect(new KUNGalgameSourceProvider(undefined, { fetcher, signal: cancelled.signal }).search({ keyword: "AIR", aliases: [], mediaType: "visual_novel" })).rejects.toThrow("cancelled");
+    expect(fetcher).not.toHaveBeenCalled();
+    const active = new AbortController();
+    const body = vi.fn(() => new Promise<unknown>(() => undefined));
+    fetcher.mockResolvedValue({ status: 200, json: body });
+    const pending = new KUNGalgameSourceProvider(undefined, { fetcher, signal: active.signal }).search({ keyword: "AIR", aliases: [], mediaType: "visual_novel" });
+    const rejection = expect(pending).rejects.toThrow("user cancelled");
+    await vi.waitFor(() => expect(body).toHaveBeenCalledOnce());
+    active.abort(new DOMException("user cancelled", "AbortError"));
+    await rejection;
+  });
+
+  it("stops waiting for a native request that ignores its timeout signal", async () => {
+    const timeout = new AbortController();
+    const spy = vi.spyOn(AbortSignal, "timeout").mockReturnValue(timeout.signal);
+    try {
+      const fetcher = vi.fn<JsonFetcher>(() => new Promise(() => undefined));
+      const provider = new KUNGalgameSourceProvider(undefined, { fetcher, timeoutMs: 500 });
+      const rejection = expect(provider.search({ keyword: "AIR", aliases: [], mediaType: "visual_novel" })).rejects.toThrow("请求超时");
+      await vi.waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+      timeout.abort(new DOMException("timed out", "TimeoutError"));
+      await rejection;
+    } finally { spy.mockRestore(); }
+  });
 });

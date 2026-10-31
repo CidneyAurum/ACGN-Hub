@@ -14,6 +14,7 @@ export interface ResourceDiscoveryInput {
   aliases?: string[];
   mediaType: MediaType;
   sources: SourceConfig[];
+  onSourceResult?: (result: SourceSearchProgress) => void;
 }
 
 export interface SourceCandidate {
@@ -34,6 +35,13 @@ export interface DiscoveredResource {
 }
 
 export interface SourceFailure { config: SourceConfig; message: string }
+export interface SourceSearchProgress {
+  config: SourceConfig;
+  candidates: SourceCandidate[];
+  failure?: SourceFailure;
+  completed: number;
+  total: number;
+}
 type ProviderFactory = (config: SourceConfig) => SourceProvider;
 
 /** Search source works only. Chapters are loaded after a work is selected. */
@@ -44,14 +52,19 @@ export async function searchSourceCandidates(input: ResourceDiscoveryInput, fact
   const sources = input.sources.filter((config) => config.enabled && sourceSupportsType(config, input.mediaType));
   const aliases = [...new Set([...(input.aliases ?? []), input.media?.title, input.media?.originalTitle, ...(input.media?.aliases ?? [])].filter((value): value is string => Boolean(value)))];
   const terms = sourceSearchTerms(input.keyword, aliases);
-  const results = await Promise.all(sources.map(async (config) => {
+  let completed = 0;
+  const pending = sources.map(async (config) => {
     try {
       const provider = factory(config);
       const query = { keyword: terms[0], aliases: terms.slice(1), mediaType: input.mediaType,
         subjectId: input.media?.externalIds.find((id) => id.provider === "bangumi")?.value,
         episodeCount: expectedEpisodeCount(input.media) };
       const candidates = await provider.search(query);
-      const ranked = rankSourceCandidates(candidates, input.keyword, aliases, config.type === "rss" ? 80 : 12);
+      const candidateLimit = input.mediaType === "novel" ? 40 : 12;
+      const ranked = rankSourceCandidates(candidates, input.keyword, aliases, config.type === "rss" ? 80 : candidateLimit, {
+        allowShortCjk: input.mediaType === "novel" || input.mediaType === "visual_novel",
+        matchAuthors: input.mediaType === "novel",
+      });
       if (input.mediaType === "anime") {
         const expectedSeason = seasonNumber(input.media?.title ?? input.keyword) ?? 1;
         for (const item of ranked) {
@@ -80,8 +93,15 @@ export async function searchSourceCandidates(input: ResourceDiscoveryInput, fact
         const sourceWarnings = item.candidate.raw?.warnings;
         item.warnings = mergeWarnings(item.warnings, sourceWarnings);
       }
-      return { config, provider, candidates: selected.slice(0, config.type === "rss" ? 40 : 12).map((item) => ({ ...item, config, provider })) };
+      return { config, provider, candidates: selected.slice(0, config.type === "rss" ? 40 : candidateLimit).map((item) => ({ ...item, config, provider })) };
     } catch (cause) { return { config, message: errorText(cause) }; }
+  });
+  const results = await Promise.all(pending.map(async (pendingResult) => {
+    const result = await pendingResult;
+    input.onSourceResult?.({ config: result.config, candidates: result.candidates ?? [],
+      ...(typeof result.message === "string" ? { failure: { config: result.config, message: result.message } } : {}),
+      completed: ++completed, total: sources.length });
+    return result;
   }));
   return {
     candidates: results.flatMap((result) => result.candidates ?? []),
@@ -109,11 +129,14 @@ export async function discoverResources(input: ResourceDiscoveryInput, factory: 
     // ranges (for example an 18-chapter short edition versus a 60-chapter
     // complete edition). The user must see and choose the correct work.
     const bookChoices = candidates.filter((candidate) => candidate.score >= 80);
+    const fallbackBooks = input.mediaType === "novel" ? candidates.filter((candidate) => !candidate.warnings.some((warning) => warning.includes("衍生篇"))) : candidates;
     const fileEditions = input.mediaType === "visual_novel" && candidates[0].config.type === "shinnku";
     const choices = fileEditions ? (bookChoices.length ? bookChoices : candidates.slice(0, 1)).slice(0, 8)
       : isFeed ? candidates.slice(0, 24) : input.mediaType === "manga" || input.mediaType === "novel"
-      ? (bookChoices.length ? bookChoices : candidates.slice(0, 1)).slice(0, 12)
+      ? (bookChoices.length ? bookChoices : fallbackBooks.slice(0, 1)).slice(0, 12)
       : candidates.slice(0, 1);
+    if (!choices.length && input.mediaType === "novel") failures.push({ config: candidates[0].config,
+      message: "此来源目前只匹配到番外或衍生篇，未将它当作正篇。请从来源搜索中确认版本，或稍后重试。" });
     for (const choice of choices) {
       try {
         const resources = await choice.provider.listResources(choice.candidate.sourceItemId);

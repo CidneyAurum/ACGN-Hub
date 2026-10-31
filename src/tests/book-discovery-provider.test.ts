@@ -106,6 +106,67 @@ describe("real book discovery", () => {
     expect(vi.mocked(fetcher).mock.calls.map(([url]) => new URL(url).search)).toEqual(["?limit=20&offset=0", "?limit=4&offset=20", "?limit=20&offset=24", "?limit=4&offset=44", "?limit=20&offset=48"]);
   });
 
+  it("shows eight real first-page novels while the remaining sixteen are still loading", async () => {
+    const data = Array.from({ length: 24 }, (_, index) => novel(index + 1));
+    let completeSecond: ((response: Awaited<ReturnType<JsonFetcher>>) => void) | undefined;
+    const fast = fetchPage(data, 60);
+    const fetcher = vi.fn<JsonFetcher>((url, init) => new URL(url).searchParams.get("offset") === "8"
+      ? new Promise((resolve) => { completeSecond = resolve; }) : fast(url, init));
+    const progress = vi.fn();
+    let finished = false;
+    const pending = getBookDiscovery("novel", { fetcher, storage: null, onProgress: progress }).then((result) => { finished = true; return result; });
+    await vi.waitFor(() => expect(progress).toHaveBeenCalledOnce());
+    expect(finished).toBe(false);
+    expect(progress.mock.calls[0][0]).toMatchObject({ partial: true, cached: false, items: data.slice(0, 8).map((item) => expect.objectContaining({ id: `bangumi:${item.id}` })) });
+    expect(fetcher.mock.calls.map(([url]) => new URL(url).search)).toEqual(["?limit=8&offset=0", "?limit=16&offset=8"]);
+    completeSecond!({ status: 200, json: async () => ({ data: data.slice(8), total: 60, limit: 16, offset: 8 }) });
+    const result = await pending;
+    expect(result.partial).toBe(false);
+    expect(result.items.map((item) => item.id)).toEqual(data.map((item) => `bangumi:${item.id}`));
+  });
+
+  it("retains and retries a partial novel page when the second batch times out", async () => {
+    vi.useFakeTimers();
+    const data = Array.from({ length: 24 }, (_, index) => novel(index + 1));
+    const storage = cache();
+    const fast = fetchPage(data, 60);
+    const fetcher = vi.fn<JsonFetcher>((url, init) => new URL(url).searchParams.get("offset") === "8"
+      ? new Promise(() => undefined) : fast(url, init));
+    const progress = vi.fn();
+    const pending = getBookDiscovery("novel", { fetcher, storage, timeoutMs: 25, now: () => timestamp, onProgress: progress });
+    await vi.advanceTimersByTimeAsync(1);
+    expect(progress).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(24);
+    const result = await pending;
+    expect(result).toMatchObject({ partial: true, stale: false, cached: false, page: 1, updatedAt: new Date(timestamp).toISOString() });
+    expect(result.items).toHaveLength(8);
+    expect(result.warning).toContain("补全本页");
+    const retried = fetchPage(data, 60);
+    const completed = await getBookDiscovery("novel", { fetcher: retried, storage, now: () => timestamp + 1000 });
+    expect(retried).toHaveBeenCalledTimes(2);
+    expect(completed.items).toHaveLength(24);
+    expect(completed).toMatchObject({ partial: false, cached: false, page: 1 });
+  });
+
+  it("retains the first batch after a definitive second-batch failure", async () => {
+    const first = fetchPage(Array.from({ length: 8 }, (_, index) => novel(index + 1)), 60);
+    const fetcher = vi.fn<JsonFetcher>((url, init) => new URL(url).searchParams.get("offset") === "8"
+      ? Promise.resolve({ status: 403, json: async () => ({}) }) : first(url, init));
+    const result = await getBookDiscovery("novel", { fetcher, storage: null });
+    expect(result.items).toHaveLength(8);
+    expect(result.partial).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps twenty-four upstream positions per page after the smaller novel first batch", async () => {
+    const fetcher = fetchPage(Array.from({ length: 49 }, (_, index) => novel(index + 1)));
+    const results = [];
+    for (const page of [1, 2, 3]) results.push(await getBookDiscovery("novel", { page, fetcher, storage: null }));
+    expect(results.map((result) => result.items.length)).toEqual([24, 24, 1]);
+    expect(results.flatMap((result) => result.items.map((item) => item.id))).toEqual(Array.from({ length: 49 }, (_, index) => `bangumi:${index + 1}`));
+    expect(vi.mocked(fetcher).mock.calls.map(([url]) => new URL(url).search)).toEqual(["?limit=8&offset=0", "?limit=16&offset=8", "?limit=20&offset=24", "?limit=4&offset=44", "?limit=20&offset=48"]);
+  });
+
   it("separates category, order and page caches and expires exactly after thirty minutes", async () => {
     const storage = cache();
     await getBookDiscovery("manga", { storage, fetcher: fetchPage([subject(1)]), now: () => timestamp });
@@ -134,6 +195,33 @@ describe("real book discovery", () => {
     await expect(getBookDiscovery("novel", { storage, fetcher: offline })).rejects.toThrow("offline");
     await expect(getBookDiscovery("manga", { sort: "score", storage, fetcher: offline })).rejects.toThrow("offline");
     await expect(getBookDiscovery("manga", { page: 2, storage, fetcher: offline })).rejects.toThrow("offline");
+  });
+
+  it("publishes expired cache before the network completes and preserves its original time on failure", async () => {
+    const storage = cache();
+    await getBookDiscovery("novel", { storage, fetcher: fetchPage([novel(1)]), now: () => timestamp });
+    const oldCache = [...storage.values.values()];
+    const progress = vi.fn();
+    const pending = getBookDiscovery("novel", { storage, fetcher: offline, now: () => timestamp + 60 * 60000, onProgress: progress });
+    expect(progress).toHaveBeenCalledOnce();
+    expect(progress.mock.calls[0][0]).toMatchObject({ cached: true, stale: true, updatedAt: new Date(timestamp).toISOString() });
+    const result = await pending;
+    expect(result).toMatchObject({ cached: true, stale: true, updatedAt: new Date(timestamp).toISOString() });
+    expect([...storage.values.values()]).toEqual(oldCache);
+  });
+
+  it("keeps a complete saved shelf when a later refresh only fetches a partial prefix", async () => {
+    const data = Array.from({ length: 24 }, (_, index) => novel(index + 1));
+    const storage = cache();
+    await getBookDiscovery("novel", { storage, fetcher: fetchPage(data, 60), now: () => timestamp });
+    const oldCache = [...storage.values.values()];
+    const fast = fetchPage(data, 60);
+    const fetcher: JsonFetcher = (url, init) => new URL(url).searchParams.get("offset") === "8"
+      ? Promise.resolve({ status: 403, json: async () => ({}) }) : fast(url, init);
+    const result = await getBookDiscovery("novel", { storage, fetcher, refresh: true, now: () => timestamp + 1000 });
+    expect(result.items).toHaveLength(24);
+    expect(result).toMatchObject({ cached: true, stale: true, partial: false, updatedAt: new Date(timestamp).toISOString() });
+    expect([...storage.values.values()]).toEqual(oldCache);
   });
 
   it("rejects copied or damaged cache categories instead of rendering mismatched cards", async () => {

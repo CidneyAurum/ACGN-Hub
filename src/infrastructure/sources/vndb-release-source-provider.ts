@@ -64,13 +64,16 @@ export class VndbReleaseSourceProvider implements SourceProvider {
 
   async search(query: SourceSearchQuery, signal = this.signal): Promise<SourceSearchResult[]> {
     if (query.mediaType !== "visual_novel") return [];
-    const keywords = [...new Set([query.keyword, ...query.aliases].map((value) => value.trim()).filter(Boolean))].slice(0, 3);
+    const explicitId = vndbIdFromInput(query.keyword);
+    const keywords = explicitId ? [explicitId] : [...new Set([query.keyword, ...query.aliases].map((value) => value.trim()).filter(Boolean))].slice(0, 3);
     if (!keywords.length) return [];
     const page = query.page ?? 1;
     if (!Number.isSafeInteger(page) || page < 1 || page > 200) throw new Error("VNDB 发行目录搜索页码无效");
+    if (explicitId && page > 1) return [];
     const responses = await Promise.allSettled(keywords.map(async (keyword) => {
       const parsed = vnResponseSchema.safeParse(await this.request("vn", {
-        filters: ["search", "=", keyword], fields: VN_FIELDS, results: 12, page, sort: "searchrank",
+        filters: [explicitId ? "id" : "search", "=", keyword], fields: VN_FIELDS,
+        results: explicitId ? 1 : 12, page, ...(!explicitId ? { sort: "searchrank" } : {}),
       }, signal));
       if (!parsed.success) throw new Error("VNDB 作品目录格式发生变化，请在原站确认");
       return parsed.data.results;
@@ -82,7 +85,9 @@ export class VndbReleaseSourceProvider implements SourceProvider {
       throw failure?.reason instanceof Error ? failure.reason : new Error("VNDB 作品目录检索失败");
     }
     const matches = new Map<string, VN>();
-    for (const response of successful) for (const vn of response.value) if (!matches.has(vn.id)) matches.set(vn.id, vn);
+    for (const response of successful) for (const vn of response.value) {
+      if ((!explicitId || vn.id === explicitId) && !matches.has(vn.id)) matches.set(vn.id, vn);
+    }
     return [...matches.values()].slice(0, 24).map((vn) => {
       const aliases = [...new Set([vn.title, vn.alttitle, ...vn.aliases, ...vn.titles.flatMap((title) => [title.title, title.latin])].filter((value): value is string => Boolean(value?.trim())))];
       const year = vn.released && /^\d{4}/.test(vn.released) ? Number(vn.released.slice(0, 4)) : undefined;
@@ -208,6 +213,16 @@ export class VndbReleaseSourceProvider implements SourceProvider {
       throw new Error("无法连接 VNDB 发行目录，请检查网络后重试");
     }
   }
+}
+
+function vndbIdFromInput(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (/^v[1-9]\d*$/.test(trimmed)) return trimmed;
+  try {
+    const url = new URL(trimmed);
+    if (url.origin !== "https://vndb.org" || url.username || url.password || url.search || url.hash) return undefined;
+    return url.pathname.match(/^\/(v[1-9]\d*)\/?$/)?.[1];
+  } catch { return undefined; }
 }
 
 function preferredTitle(vn: VN): string {

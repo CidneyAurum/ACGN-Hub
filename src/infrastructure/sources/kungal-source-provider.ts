@@ -5,7 +5,9 @@ import type { MediaType } from "@/domain/media";
 import type { ResourceItem } from "@/domain/resource";
 import { createJsonFetcher, type JsonFetcher } from "@/infrastructure/metadata/json-transport";
 import { parseDownloadTarget } from "@/shared/validation";
-import { normalizeSourceTitle } from "./source-matching";
+import { abortableRequest } from "@/infrastructure/metadata/abortable-request";
+import { isTimeoutError } from "@/infrastructure/metadata/response-errors";
+import { matchesGalgameTitle } from "./galgame-title-matching";
 
 const decimalId = z.string().regex(/^[1-9]\d{0,18}$/);
 const imageSchema = z.object({ url: z.string().url() }).passthrough();
@@ -27,7 +29,7 @@ const RESOURCE_TYPE_LABELS: Record<string, string> = { game: "游戏本体", pat
 const LANGUAGE_LABELS: Record<string, string> = { "zh-cn": "简体中文", "zh-hans": "简体中文", "zh-tw": "繁体中文", "zh-hk": "繁体中文", "zh-hant": "繁体中文", zh: "中文", ja: "日文", en: "英文", ko: "韩文", multi: "多语言", other: "其他语言" };
 const PLATFORM_LABELS: Record<string, string> = { win: "Windows", windows: "Windows", mac: "macOS", macos: "macOS", lin: "Linux", linux: "Linux", and: "Android", android: "Android", ios: "iOS", web: "浏览器", switch: "Switch", psp: "PSP", psv: "PS Vita", other: "其他平台" };
 const RUNTIME_LABELS: Record<string, string> = { "native-win": "Windows 原生", "native-mac": "macOS 原生", "native-linux": "Linux 原生", "native-and": "Android 原生", "native-android": "Android 原生", "native-ios": "iOS 原生", emulator: "模拟器", kirikiri: "吉里吉里", kirikiroid2: "吉里吉里2", tyranor: "Tyranor", renpy: "Ren'Py", onscripter: "ONScripter", web: "浏览器", other: "其他运行方式" };
-export interface KUNGalgameSourceProviderOptions { fetcher?: JsonFetcher; timeoutMs?: number }
+export interface KUNGalgameSourceProviderOptions { fetcher?: JsonFetcher; timeoutMs?: number; signal?: AbortSignal }
 
 /** Public v1 catalog. Share-link resolution and download counters stay on the source site.
  * https://github.com/KunMoe/kun-galgame-forum/tree/master/apps/api/internal/search/apiv1
@@ -40,13 +42,16 @@ export class KUNGalgameSourceProvider implements SourceProvider {
   private readonly baseUrl: string;
   private readonly fetcher: JsonFetcher;
   private readonly timeoutMs: number;
+  private readonly signal?: AbortSignal;
   private readonly games = new Map<string, Work>();
   private readonly resources = new Map<string, ResourceItem>();
   constructor(baseUrl = "https://www.kungal.com", options: KUNGalgameSourceProviderOptions = {}) {
     const parsed = new URL(baseUrl);
     if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error("鲲 Galgame 地址必须是不带认证信息的 HTTP/HTTPS 地址");
     this.baseUrl = parsed.origin; this.id = `kungal:${this.baseUrl}`;
-    this.fetcher = options.fetcher ?? createJsonFetcher(); this.timeoutMs = options.timeoutMs ?? 10_000;
+    this.fetcher = options.fetcher ?? createJsonFetcher();
+    this.timeoutMs = Number.isFinite(options.timeoutMs) ? Math.min(35_000, Math.max(500, options.timeoutMs!)) : 10_000;
+    this.signal = options.signal;
   }
   async search(query: SourceSearchQuery): Promise<SourceSearchResult[]> {
     if (query.mediaType !== "visual_novel") return [];
@@ -58,17 +63,16 @@ export class KUNGalgameSourceProvider implements SourceProvider {
     const queries = [...new Set([query.keyword, ...query.aliases].map((value) => value.trim()).filter(Boolean))].slice(0, 4);
     if (!queries.length) return [];
     const responses = await Promise.allSettled(queries.map((value) => this.searchWorks(value, query.page ?? 1)));
+    this.signal?.throwIfAborted();
     const successful = responses.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
     if (!successful.length) {
       const failure = responses.find((result): result is PromiseRejectedResult => result.status === "rejected")?.reason;
       throw failure instanceof Error ? failure : new Error("鲲 Galgame 公开目录搜索失败");
     }
-    const terms = queries.map(normalizeSourceTitle).filter(Boolean); const games = new Map<string, Work>();
+    const games = new Map<string, Work>();
     for (const items of successful) for (const game of items) {
-      const haystack = normalizeSourceTitle(workAliases(game).join(" "));
-      if (!game.is_nsfw && terms.some((term) => haystack.includes(term))) games.set(game.id, game);
+      if (!game.is_nsfw && matchesGalgameTitle(queries, workAliases(game))) games.set(game.id, game);
     }
-    this.games.clear(); this.resources.clear();
     return [...games.values()].map((game) => this.toSearchResult(game));
   }
   async listResources(sourceItemId: string): Promise<ResourceItem[]> {
@@ -108,7 +112,9 @@ export class KUNGalgameSourceProvider implements SourceProvider {
           size: card.size, sizeLabel: card.size.trim(), catalogApiVersion: "v1", ...(card.updated_at ? { sourceUpdatedAt: card.updated_at } : {}),
           searchTerms: [resourceTypeLabel, ...languageLabels, ...platformLabels, ...runtimeLabels, ...androidKeywords, card.size, ...card.provider_names, ...card.resource_platforms, ...card.resource_runtimes, ...card.resource_languages].join(" "),
           ...(truncated ? { catalogTruncated: true } : {}), warnings }, createdAt: new Date().toISOString() };
-      this.resources.set(resource.id, resource); return resource;
+      this.resources.set(resource.id, resource);
+      if (this.resources.size > 1_500) this.resources.delete(this.resources.keys().next().value!);
+      return resource;
     });
   }
   async resolve(resourceId: string): Promise<DownloadTarget> {
@@ -122,6 +128,7 @@ export class KUNGalgameSourceProvider implements SourceProvider {
   }
   private toSearchResult(game: Work): SourceSearchResult {
     this.games.set(game.id, game);
+    if (this.games.size > 200) this.games.delete(this.games.keys().next().value!);
     const coverUrl = game.cover?.url ?? game.banner?.url;
     const year = game.release_date && /^\d{4}-/.test(game.release_date) ? Number(game.release_date.slice(0, 4)) : undefined;
     return { sourceId: this.id, sourceItemId: game.id, title: preferredTitle(game), aliases: workAliases(game), ...(coverUrl ? { coverUrl } : {}), ...(year ? { releaseYear: year } : {}),
@@ -151,8 +158,23 @@ export class KUNGalgameSourceProvider implements SourceProvider {
     if (!parsed.success) throw new Error("鲲 Galgame 公开作品目录响应格式发生变化，请打开原站查看"); return parsed.data.items;
   }
   private async fetchJson(url: string): Promise<unknown> {
-    const response = await this.fetcher(url, { method: "GET", headers: { Accept: "application/json" }, signal: AbortSignal.timeout(this.timeoutMs), timeoutMs: this.timeoutMs });
-    if (response.status < 200 || response.status >= 300) throw new Error(`鲲 Galgame 公开目录 HTTP ${response.status}，请打开原站确认访问条件`); return response.json();
+    this.signal?.throwIfAborted();
+    const timed = AbortSignal.timeout(this.timeoutMs);
+    const signal = this.signal ? AbortSignal.any([this.signal, timed]) : timed;
+    try {
+      const response = await abortableRequest(() => this.fetcher(url, {
+        method: "GET", headers: { Accept: "application/json" }, credentials: "omit", signal, timeoutMs: this.timeoutMs,
+      }), signal);
+      if (response.status === 429) throw new Error("鲲 Galgame 目录请求过于频繁，请稍后重试");
+      if (response.status < 200 || response.status >= 300) throw new Error(`鲲 Galgame 公开目录 HTTP ${response.status}，请打开原站确认访问条件`);
+      return await abortableRequest(() => response.json(), signal);
+    } catch (cause) {
+      this.signal?.throwIfAborted();
+      if (timed.aborted || isTimeoutError(cause)) throw new Error("鲲 Galgame 目录请求超时，请稍后重试");
+      if (cause instanceof Error && cause.message.startsWith("鲲 Galgame ")) throw cause;
+      if (cause instanceof SyntaxError) throw new Error("鲲 Galgame 公开目录返回了无效 JSON，请稍后重试");
+      throw new Error("无法连接鲲 Galgame 公开目录，请检查网络后重试");
+    }
   }
 }
 function preferredTitle(game: Work): string { return game.localized["zh-Hans"]?.value.trim() || game.localized["zh-Hant"]?.value.trim() || game.display_name.trim() || game.localized.en?.value.trim() || `鲲 Galgame #${game.id}`; }

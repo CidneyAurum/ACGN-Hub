@@ -63,6 +63,7 @@ watch(type, (value) => {
     vndb_release: { url: "https://api.vndb.org/kana", name: "VNDB · 官方发行与试玩" },
     shinnku: { url: "https://www.shinnku.com", name: "真红小站 · 游戏文件" },
     shionlib: { url: "https://shionlib.com", name: "ShionLib · 游戏资源库" },
+    lnovel: { url: "https://lnovel.animes.garden", name: "LNovel 中文轻小说" },
   };
   if (defaults[value]) { url.value = defaults[value].url; if (!name.value.trim()) name.value = defaults[value].name; }
   if (value === "public_video") {

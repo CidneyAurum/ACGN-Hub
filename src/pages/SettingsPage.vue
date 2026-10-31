@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { loadSettings, loadSessionSecret, saveSessionSecret, saveSettings, loadSessionQbittorrentCredentials, saveSessionQbittorrentCredentials } from "@/shared/settings";
 import { probeDownloadEngine } from "@/infrastructure/download/create-download-engine";
@@ -14,6 +15,12 @@ const saved = ref("");
 const error = ref("");
 const testing = ref("");
 const connectionMessages = ref<Record<string, { ok: boolean; message: string }>>({});
+const portableDirectory = ref("");
+onMounted(async () => {
+  if (!isTauriRuntime()) return;
+  try { portableDirectory.value = (await invoke<{ dataDirectory: string } | null>("get_portable_profile"))?.dataDirectory ?? ""; }
+  catch (cause) { error.value = cause instanceof Error ? cause.message : "无法读取便携资料目录"; }
+});
 type DirectoryKey = "incomingDirectory" | "libraryDirectory" | "obsidianEbookDirectory" | "backupDirectory" | "downloadDirectory";
 const directories: Array<{ key: DirectoryKey; title: string; description: string }> = [
   { key: "incomingDirectory", title: "待整理目录", description: "下载的中转位置；整理只会从这个目录内移动文件。" },
@@ -105,6 +112,7 @@ function restoreSaved(): void {
 
     <section class="card">
       <div class="card-heading"><div><h3>保存位置</h3><p class="muted">这些是配置路径；选择目录和保存设置不会移动已有文件。</p></div></div>
+      <div v-if="portableDirectory" class="portable-mode-note" role="status"><strong>便携模式</strong><p>资料保存在 {{ portableDirectory }}。关闭应用后，将完整程序文件夹连同 Data 一起移动；内部文件路径会在下次启动时更新。自定义外部目录需要另外携带。</p></div>
       <div class="directory-settings">
         <label v-for="directory in directories" :key="directory.key"><span>{{ directory.title }}</span><div class="path-picker"><input v-model="settings[directory.key]" :required="directory.key !== 'downloadDirectory'" :placeholder="directory.key === 'downloadDirectory' ? '留空则使用待整理目录' : '填写绝对路径或选择目录'" /><button class="ghost-button" type="button" @click="chooseDirectory(directory.key)">选择目录</button></div><small class="muted">{{ directory.description }}</small></label>
       </div>
@@ -140,5 +148,6 @@ function restoreSaved(): void {
 </template>
 
 <style scoped>
+.portable-mode-note{border:1px solid #e8deee;background:#faf6fd;border-radius:10px;padding:14px 16px;margin-bottom:20px;color:#846596;font-size:12px;overflow-wrap:anywhere}.portable-mode-note p{margin:6px 0 0;line-height:1.8;color:#9882a6}
 .auto-rename-option{display:flex;align-items:center;gap:8px;margin-top:20px;font-size:12px}.auto-rename-option input{width:auto;accent-color:#a282bc}
 </style>

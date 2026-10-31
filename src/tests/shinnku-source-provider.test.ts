@@ -47,6 +47,40 @@ describe("Shinnku public file catalog", () => {
     await expect(restored.resolve(resources[0].id)).resolves.toEqual({ protocol: "http", url: resources[0].targetUrl, filename: "CLANNAD(官中).7z" });
   });
 
+  it("keeps original-collection editions searchable and revalidates their separate catalog and storage paths", async () => {
+    const original = file("合集系列/浮士德galgame游戏合集/5/2019年10月/[191017][Key] CLANNAD HD Edition steam版 (files).rar", 4_226_419_041);
+    const translated = file();
+    const fetcher = vi.fn<TextFetcher>().mockResolvedValueOnce(text(searchHtml([original, translated])))
+      .mockResolvedValueOnce(text(detailHtml(original))).mockResolvedValueOnce(text(folderHtml([original])));
+    const provider = new ShinnkuSourceProvider(undefined, { fetcher });
+    const matches = await provider.search(query);
+    expect(matches).toHaveLength(2);
+    const selected = matches.find((match) => match.raw?.catalogCollection === "original")!;
+    expect(selected.title).toBe("CLANNAD HD Edition steam版 (files)");
+    const [resource] = await provider.listResources(selected.sourceItemId);
+    expect(fetcher.mock.calls[1][0]).toBe("https://www.shinnku.com/files/galgame0/5/2019%E5%B9%B410%E6%9C%88/%5B191017%5D%5BKey%5D%20CLANNAD%20HD%20Edition%20steam%E7%89%88%20(files).rar");
+    expect(fetcher.mock.calls[2][0]).toBe("https://www.shinnku.com/files/galgame0/5/2019%E5%B9%B410%E6%9C%88");
+    expect(resource.targetUrl).toBe("https://galgamedownload.date/%60%E3%80%90%E5%90%88%E9%9B%86%E7%B3%BB%E5%88%97%E3%80%91/%E6%B5%AE%E5%A3%AB%E5%BE%B7galgame%E6%B8%B8%E6%88%8F%E5%90%88%E9%9B%86/5/2019%E5%B9%B410%E6%9C%88/%5B191017%5D%5BKey%5D%20CLANNAD%20HD%20Edition%20steam%E7%89%88%20(files).rar");
+    expect(resource).toMatchObject({ sizeBytes: 4_226_419_041, format: "RAR", metadata: {
+      downloadMode: "direct_file", catalogCollection: "original", languages: [], platforms: [],
+      languageLabels: ["语言待确认"], resourceType: "game", rangeSupport: "unknown",
+    } });
+    expect(resource.metadata.warnings).toContain("这是原站原文合集；目录本身不能证明包含中文，请先核对文件内的语言和版本说明。");
+    const restored = new ShinnkuSourceProvider(undefined, { fetcher: vi.fn<TextFetcher>() });
+    await expect(restored.resolve(resource.id)).resolves.toMatchObject({ url: resource.targetUrl, filename: original.file_path.split("/").at(-1) });
+  });
+
+  it("revalidates all original-collection multipart files using their own catalog root", async () => {
+    const first = file("合集系列/浮士德galgame游戏合集/5/2020年6月/ATRI.7z.001");
+    const second = file("合集系列/浮士德galgame游戏合集/5/2020年6月/ATRI.7z.002");
+    const fetcher = vi.fn<TextFetcher>().mockResolvedValueOnce(text(detailHtml(first))).mockResolvedValueOnce(text(folderHtml([second, first])));
+    const items = await new ShinnkuSourceProvider(undefined, { fetcher }).listResources(itemId(first.file_path));
+    expect(items.map((item) => item.title)).toEqual(["ATRI.7z.001", "ATRI.7z.002"]);
+    expect(items[0].metadata.requiredFiles).toEqual(["ATRI.7z.001", "ATRI.7z.002"]);
+    expect(items.every((item) => new URL(item.targetUrl).hostname === "galgamedownload.date")).toBe(true);
+    expect(fetcher.mock.calls[1][0]).toBe("https://www.shinnku.com/files/galgame0/5/2020%E5%B9%B46%E6%9C%88");
+  });
+
   it("retains English/Japanese filename aliases and retries independent names without losing successful results", async () => {
     const fetcher = vi.fn<TextFetcher>().mockImplementation(async (url) => url.includes("ATRI") ? text(searchHtml([file("0/win/ATRI -My Dear Moments- v1.3.7z")])) : text("unavailable", 503));
     const matches = await new ShinnkuSourceProvider(undefined, { fetcher }).search({ keyword: "亚托莉", aliases: ["ATRI -My Dear Moments-"], mediaType: "visual_novel" });
@@ -160,7 +194,7 @@ describe("Shinnku public file catalog", () => {
     expect(resource.metadata.languages).toEqual([]);
   });
 
-  it.each([["0/win/Game OST.zip", "ost"], ["0/win/Game(体験版).7z", "trial"]])("keeps explicitly marked extras apart from the main game: %s", async (path, resourceType) => {
+  it.each([["0/win/Game OST.zip", "ost"], ["0/win/Game(体験版).7z", "trial"], ["0/win/Game 全CG存档.zip", "save"], ["0/win/Game_savedata.zip", "save"], ["0/tools/Game Runtime.zip", "tool"], ["0/win/Save the Date.zip", "game"]])("keeps explicitly marked extras apart from the main game: %s", async (path, resourceType) => {
     const info = file(path);
     const fetcher = vi.fn<TextFetcher>().mockResolvedValue(text(detailHtml(info)));
     const [resource] = await new ShinnkuSourceProvider(undefined, { fetcher }).listResources(itemId(info.file_path));
@@ -242,8 +276,8 @@ describe("Shinnku public file catalog", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("ignores the separate original-language collection and readme placeholders", async () => {
-    const fetcher = vi.fn<TextFetcher>().mockResolvedValue(text(searchHtml([file("合集系列/浮士德galgame游戏合集/CLANNAD.rar"), file("0/win/CLANNAD/README.md", 55), file("0/win/CLANNAD(缺少).txt", 0)])));
+  it("ignores unsupported collection roots and readme placeholders", async () => {
+    const fetcher = vi.fn<TextFetcher>().mockResolvedValue(text(searchHtml([file("合集系列/其他未经验证的合集/CLANNAD.rar"), file("0/win/CLANNAD/README.md", 55), file("0/win/CLANNAD(缺少).txt", 0)])));
     await expect(new ShinnkuSourceProvider(undefined, { fetcher }).search(query)).resolves.toEqual([]);
   });
 

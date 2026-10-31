@@ -11,6 +11,7 @@ param(
     [string]$ProfileName = '',
     [string]$DataDirectory = '',
     [string]$ExecutablePath = '',
+    [switch]$UseAdjacentPortableProfile,
     [switch]$ReuseProfile,
     [switch]$Passive
 )
@@ -53,6 +54,15 @@ if ($Action -eq 'Start') {
     }
     $profileLabel = if ($ProfileName) { $ProfileName } else { $Session }
     $profile = Join-Path $taskRoot ('.work\' + $profileLabel + '-profile')
+    if ($UseAdjacentPortableProfile) {
+        if ($DataDirectory -or $ProfileName) { throw 'Adjacent portable verification cannot override its profile path.' }
+        $portableDirectory = [IO.Path]::GetDirectoryName($exe)
+        $marker = Join-Path $portableDirectory 'ACGN-HUB-PORTABLE'
+        if (-not (Test-Path -LiteralPath $marker -PathType Leaf) -or [IO.File]::ReadAllText($marker) -cne "ACGN Hub portable profile v1`n") {
+            throw 'Adjacent portable verification requires the production portable marker beside the executable.'
+        }
+        $profile = Join-Path $portableDirectory 'Data'
+    }
     if ($DataDirectory) {
         if (-not $ReuseProfile -or -not [IO.Path]::IsPathRooted($DataDirectory)) { throw 'An explicit absolute existing data directory requires ReuseProfile.' }
         $profile = [IO.Path]::GetFullPath($DataDirectory)
@@ -77,7 +87,8 @@ if ($Action -eq 'Start') {
     $oldWebArgs = $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
     $oldPipe = $env:WEBVIEW2_PIPE_FOR_SCRIPT_DEBUGGER
     try {
-        $env:ACGN_HUB_DATA_DIR = $profile
+        if ($UseAdjacentPortableProfile) { Remove-Item Env:ACGN_HUB_DATA_DIR -ErrorAction SilentlyContinue }
+        else { $env:ACGN_HUB_DATA_DIR = $profile }
         Remove-Item Env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS -ErrorAction SilentlyContinue
         Remove-Item Env:WEBVIEW2_PIPE_FOR_SCRIPT_DEBUGGER -ErrorAction SilentlyContinue
         $app = Start-Process -FilePath $exe -WorkingDirectory $taskRoot -WindowStyle Hidden -PassThru

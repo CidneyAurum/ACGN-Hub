@@ -12,6 +12,8 @@ const MAX_HTML_LENGTH = 3 * 1024 * 1024;
 const MAX_CATALOG_FILES = 10_000;
 const MAX_SEARCH_RESULTS = 80;
 const DOWNLOAD_BASE = "https://zd.shinnku.top/file/shinnku/";
+const ORIGINAL_COLLECTION = "合集系列/浮士德galgame游戏合集/";
+const ORIGINAL_DOWNLOAD_BASE = "https://galgamedownload.date/";
 const fileSchema = z.object({
   file_path: z.string().min(1).max(2_048),
   file_size: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
@@ -28,8 +30,9 @@ export interface ShinnkuSourceProviderOptions {
 /** Reads the public site's JSON-encoded Next/RSC catalog, never executes scripts.
  * Protocol evidence: https://github.com/shinnku-nikaidou/shinnku-com
  * /search?q=... supplies file_path/size; /files/shinnku/... revalidates saved IDs.
- * Only the shinnku library uses the documented stable download endpoint. The
- * separate original-Japanese galgame0 collection has a different storage map.
+ * Both public libraries use the site's documented stable URL maps. galgame0
+ * removes two virtual catalog roots on its detail pages, but retains them in
+ * the separate storage URL. Collection membership alone proves no language.
  */
 export class ShinnkuSourceProvider implements SourceProvider {
   readonly id: string;
@@ -85,7 +88,7 @@ export class ShinnkuSourceProvider implements SourceProvider {
       // Latin queries, require a real token in an original filename/alias before
       // scoring, while allowing adjacent Chinese/Japanese edition annotations.
       const matchingTerms = terms.filter((term) => matchesShortLatinBoundary(term, [title, ...aliases]));
-      const match = sourceTitleMatch(title, matchingTerms, aliases);
+      const match = sourceTitleMatch(title, matchingTerms, aliases, { allowShortCjk: true });
       return { files, file, title, aliases, score: match.score, priority: filePriority(file) };
     }).filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score || b.priority - a.priority || a.title.localeCompare(b.title));
@@ -94,7 +97,7 @@ export class ShinnkuSourceProvider implements SourceProvider {
       sourceId: this.id, sourceItemId: encodeItemId(file.file_path), title, aliases,
       raw: {
         sourceUrl: this.filePage(file.file_path), filePath: file.file_path, fileSize: file.file_size,
-        editionLabel: title, catalogTruncated: truncated,
+        editionLabel: title, catalogTruncated: truncated, catalogCollection: collection(file.file_path),
         ...(multipartKey(file.file_path) ? { multipart: true, matchedParts: files.map((part) => fileName(part.file_path)) } : {}),
       },
     }));
@@ -145,7 +148,12 @@ export class ShinnkuSourceProvider implements SourceProvider {
     }
   }
 
-  private filePage(path: string): string { return `${this.baseUrl}/files/shinnku/${encodePath(path)}`; }
+  private filePage(path: string): string {
+    if (path === ORIGINAL_COLLECTION.slice(0, -1)) return `${this.baseUrl}/files/galgame0`;
+    return path.startsWith(ORIGINAL_COLLECTION)
+      ? `${this.baseUrl}/files/galgame0/${encodePath(path.slice(ORIGINAL_COLLECTION.length))}`
+      : `${this.baseUrl}/files/shinnku/${encodePath(path)}`;
+  }
 
   private toResource(file: CatalogFile, sourceItemId: string, parts?: CatalogFile[]): ResourceItem {
     const path = file.file_path;
@@ -154,7 +162,10 @@ export class ShinnkuSourceProvider implements SourceProvider {
     const warnings = ["来源标注的语言与版本以压缩包内容为准，下载后请自行解压确认；不会自动运行游戏或安装程序。"];
     if (labels.resourceType === "patch") warnings.push("这是补丁，需要对应版本的游戏本体。");
     if (labels.resourceType === "trial") warnings.push("这是体验版，并非完整游戏。");
+    if (labels.resourceType === "save") warnings.push("这是游戏存档，需要对应的游戏本体，不能独立运行。");
+    if (labels.resourceType === "tool") warnings.push("这是运行辅助工具，不是所选游戏的本体。");
     if (labels.partialTranslation) warnings.push("来源文件名注明部分内容尚未汉化，不能视为完整中文版本。");
+    if (collection(path) === "original" && !labels.languages.length) warnings.push("这是原站原文合集；目录本身不能证明包含中文，请先核对文件内的语言和版本说明。");
     if (parts) warnings.push(`这是分卷档案，共 ${parts.length} 个目录条目；请将全部分卷保存到同一目录并保留分卷文件名后解压。`);
     const sourceUpdatedAt = new Date(file.upload_timestamp).toISOString();
     return {
@@ -166,7 +177,8 @@ export class ShinnkuSourceProvider implements SourceProvider {
         downloadMode: "direct_file", resourceLabel: "原站文件直链", provider: this.name,
         resourceType: labels.resourceType, resourceTypeLabel: labels.resourceTypeLabel,
         sourceUrl: this.filePage(path), filePath: path, filename: safeFileName(name), downloadFileName: safeFileName(name), originalFileName: name,
-        editionLabel: editionTitle(path), sourceUpdatedAt,
+        editionLabel: editionTitle(path), sourceUpdatedAt, catalogCollection: collection(path),
+        catalogCollectionLabel: collection(path) === "original" ? "原文合集" : "中文与移植目录",
         language: labels.language ?? "unknown", languages: labels.languages, languageLabels: labels.languageLabels,
         languageEvidence: labels.languageEvidence, platform: labels.platforms.join(" / "), platforms: labels.platforms, platformLabels: labels.platformLabels,
         ...(labels.partialTranslation ? { partialTranslation: true } : {}),
@@ -249,12 +261,19 @@ function safePath(path: string): boolean {
   return path.length <= 2_048 && !/[\\\u0000-\u001f\u007f]/.test(path)
     && path.split("/").every((segment) => Boolean(segment) && segment !== "." && segment !== "..");
 }
-function validPath(path: string): boolean { return /^(?:0|zd)\//.test(path) && safePath(path); }
+function validPath(path: string): boolean { return (/^(?:0|zd)\//.test(path) || path.startsWith(ORIGINAL_COLLECTION)) && safePath(path); }
 function isSupportedFile(path: string): boolean { return validPath(path) && /\.(?:7z|zip|rar|iso|lzh|apk)(?:\.\d{3})?$|\.part\d+\.rar$|\.r\d{2}$/i.test(path); }
 function encodePath(path: string): string { return path.split("/").map(encodeURIComponent).join("/"); }
 function fileName(path: string): string { return path.slice(path.lastIndexOf("/") + 1); }
 function safeFileName(name: string): string { return name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_"); }
-function downloadUrl(path: string): string { return `${DOWNLOAD_BASE}${encodePath(path)}`; }
+function collection(path: string): "original" | "translated" { return path.startsWith(ORIGINAL_COLLECTION) ? "original" : "translated"; }
+function downloadUrl(path: string): string {
+  // The literal leading backtick is part of the source's public object key.
+  // Keep encoding per segment so it cannot become a query, fragment or host.
+  return collection(path) === "original"
+    ? `${ORIGINAL_DOWNLOAD_BASE}${encodePath(["`【合集系列】", ...path.split("/").slice(1)].join("/"))}`
+    : `${DOWNLOAD_BASE}${encodePath(path)}`;
+}
 function encodeItemId(path: string): string { return `file:${encodeURIComponent(path)}`; }
 function decodeItemId(id: string): string {
   let path: string;
@@ -298,7 +317,7 @@ function matchesShortLatinBoundary(term: string, names: string[]): boolean {
   return names.some((name) => boundary.test(name.normalize("NFKC")));
 }
 function fileLabels(path: string) {
-  const name = fileName(path);
+  const name = fileName(path).replace(/[_+.]/g, " ");
   const partialTranslation = /(?:h\s*未(?:汉|漢|翻译|翻譯)|部分[^,，;；()（）]{0,8}未(?:汉|漢|翻译|翻譯)|未完全(?:汉化|漢化)|部分(?:汉化|漢化))/i.test(name);
   const untranslated = !partialTranslation && /未(?:汉化|漢化|汉|漢)|无汉化|無漢化|无中文|無中文|不含中文/.test(name);
   const positiveLanguageName = name.replace(/未(?:汉化|漢化|汉|漢)|无汉化|無漢化|无中文|無中文|不含中文/g, "");
@@ -312,13 +331,15 @@ function fileLabels(path: string) {
   // patch download. Remove only those clauses before looking for a patch label.
   const patchName = /(?:仅|僅|只)(?:含|有|带|帶)[^,，;；()（）]{0,12}(?:补丁|補丁|パッチ)/.test(name) ? name
     : name.replace(/(?:已\s*(?:打(?:上)?|集成|整合|安装|安裝|应用|應用)|集成|整合|自带|自帶|内置|內置|附带|附帶|含(?:有)?)[^,，;；()（）\[\]【】]{0,20}(?:补丁|補丁|パッチ|\bpatch\b)/gi, "");
-  const resourceType = /(?:补丁|補丁|\bpatch\b|修正パッチ)/i.test(patchName) ? "patch"
+  const resourceType = /\/tools?\//i.test(path) ? "tool"
+    : /(?:补丁|補丁|\bpatch\b|修正パッチ)/i.test(patchName) ? "patch"
     : /(?:体验版|體驗版|体験版|\btrial\b|\bdemo\b)/i.test(name) ? "trial"
+    : /(?:存档|存檔|セーブデータ|\bsave[ _-]*data\b)/i.test(name) ? "save"
     : /(?:\bOST\b|\bBGM\b|サウンドトラック|原声|原聲)/i.test(name) ? "ost"
     : /(?:画集|畫集|設定資料|设定集|\bartbook\b)/i.test(name) ? "artbook"
     : /(?:攻略|\bwalkthrough\b)/i.test(name) ? "walkthrough"
     : /(?:合集|collection)/i.test(name) ? "collection" : "game";
-  const resourceTypeLabel = ({ patch: "补丁", trial: "试玩版", collection: "合集", game: "游戏本体", ost: "原声", artbook: "画集 / 设定集", walkthrough: "攻略" })[resourceType];
+  const resourceTypeLabel = ({ patch: "补丁", trial: "试玩版", collection: "合集", game: "游戏本体", ost: "原声", artbook: "画集 / 设定集", walkthrough: "攻略", save: "存档", tool: "运行工具" })[resourceType];
   const platform = /\/(?:android|apk|krkr|ons|kirikiri)\//i.test(path) || /\.apk$/i.test(path) ? "and"
     : path.startsWith("0/win/") || path.startsWith("zd/") ? "win" : undefined;
   return {
@@ -334,5 +355,6 @@ function fileLabels(path: string) {
 function filePriority(file: CatalogFile): number {
   const labels = fileLabels(file.file_path);
   return (labels.languages.includes("zh") ? 100 : 0) + (labels.platforms.includes("win") ? 40 : 0)
-    + (labels.resourceType === "game" ? 30 : -50) + (/官中/.test(file.file_path) ? 20 : 0);
+    + (labels.resourceType === "game" ? 30 : -50) + (/官中/.test(file.file_path) ? 20 : 0)
+    + (/\bHD\s*(?:Edition)?\b|\bremaster(?:ed)?\b|高清版|重制版|重製版/i.test(fileName(file.file_path)) ? 8 : 0);
 }

@@ -40,7 +40,8 @@ fn owned_aria2() -> &'static std::sync::Mutex<Option<OwnedAria2>> {
 /// A documented portable profile, covering the database, webview state and default files.
 pub fn portable_data_directory() -> Result<Option<PathBuf>, String> {
     let Some(value) = std::env::var_os("ACGN_HUB_DATA_DIR") else {
-        return Ok(None);
+        let executable = std::env::current_exe().map_err(|error| format!("无法定位程序文件：{error}"))?;
+        return crate::portable_profile::adjacent_profile(&executable);
     };
     let path = PathBuf::from(value);
     if !path.is_absolute() || crate::safe_fs::has_parent_component(&path) {
@@ -60,14 +61,13 @@ pub struct RuntimeDefaults {
 
 #[tauri::command]
 pub fn get_runtime_defaults(app: tauri::AppHandle) -> Result<RuntimeDefaults, String> {
-    let downloads = app
-        .path()
-        .download_dir()
-        .or_else(|_| app.path().home_dir().map(|path| path.join("Downloads")))
-        .map_err(|error| format!("无法定位用户下载目录：{error}"))?;
-    let root = portable_data_directory()?
-        .map(|profile| profile.join("Files"))
-        .unwrap_or_else(|| downloads.join("ACGN"));
+    let root = if let Some(profile) = portable_data_directory()? {
+        profile.join("Files")
+    } else {
+        app.path().download_dir()
+            .or_else(|_| app.path().home_dir().map(|path| path.join("Downloads")))
+            .map_err(|error| format!("无法定位用户下载目录：{error}"))?.join("ACGN")
+    };
     let incoming = root.join("Incoming");
     *DEFAULT_INCOMING
         .get_or_init(|| std::sync::Mutex::new(None))
