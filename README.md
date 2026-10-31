@@ -1,5 +1,21 @@
 # ACGN Hub 0.3.9
 
+ACGN Hub 是面向 Windows 的动画、漫画、轻小说与 Galgame 发现及下载管理工具。动画首页随季度更新，漫画、轻小说与 Galgame 提供封面书架；作品资料来自 Bangumi、VNDB 等来源。已下载的 CBZ 漫画与 TXT 小说可在应用内阅读，并保存阅读进度。
+
+**[下载最新 Windows 版本（v0.3.9）](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.9)** · [使用说明](docs/releases/v0.3.9-usage.md) · [公开源码](https://github.com/CidneyAurum/ACGN-Hub)
+
+下载能力取决于各来源的实际内容与访问条件；作品资料、资源索引、站外链接和可下载文件在界面中分别标明。具体限制与历史验证记录见下文。
+
+## 界面预览
+
+以下为 v0.3.9 桌面程序的实际界面，使用独立资料库与公开作品资料。
+
+| 动画 · 季度发现 | 漫画 · 封面书架 |
+| --- | --- |
+| ![动画季度发现页](docs/screenshots/01-anime.png) | ![漫画发现页](docs/screenshots/02-manga.png) |
+| 轻小说 · 作品发现 | Galgame · 作品发现 |
+| ![轻小说发现页](docs/screenshots/03-novel.png) | ![Galgame 发现页](docs/screenshots/04-galgame.png) |
+
 ## 0.3.9：暖色小电视图标
 
 软件、窗口、侧栏与浏览器标识统一为暖粉紫小电视、奶白屏幕和轻微笑脸。提供 16–256 像素 ICO 帧，清理旧标识的背景样式，并更新站内缓存标识。桌面入口已切换到 0.3.9，沿用原 Data。
@@ -18,7 +34,7 @@
 
 604 项单测、80 项完整浏览器回归、最后 13 项 Galgame 回归、Rust 86 项（2 默认忽略）通过；最终桌面及扫描通过。原数据库 9 表、3 个媒体文件和 16 个旧程序保留，桌面入口更新至 0.3.8，沿用原 Data。
 
-[0.3.8 发布包](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.8) · [使用说明](docs/releases/v0.3.8-usage.md) · [真红核验](docs/research/galgame-direct-source-v038.md) · [ShionLib 核验](docs/research/galgame-secondary-sources-v038.md) · [交付记录](docs/research/galgame-v038-delivery.md)。发布包不含用户资料或游戏归档，仓库保持私有。
+[0.3.8 发布包](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.8) · [使用说明](docs/releases/v0.3.8-usage.md) · [真红核验](docs/research/galgame-direct-source-v038.md) · [ShionLib 核验](docs/research/galgame-secondary-sources-v038.md) · [交付记录](docs/research/galgame-v038-delivery.md)。发布包不含用户资料或游戏归档；源码仓库现已公开。
 
 ## 0.3.7：Galgame 发现与资源
 
@@ -28,7 +44,7 @@ Galgame 发现页使用 VNDB 实时封面、中文可用佳作和近两年原作
 
 487 项单测、74 项完整浏览器回归、最后 12 项定向回归、Rust 86 项（2 默认忽略）、最终桌面及静态扫描通过。桌面快捷方式更新至 0.3.7，沿用原 Data；数据库 9 表、3 个媒体文件和 14 个旧程序保持。未完整下载、安装或运行 Galgame；原厂 LZH 已验证 Range、容量与文件头。
 
-[0.3.7 发布包](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.7) · [使用说明](docs/releases/v0.3.7-usage.md) · [来源审计](docs/research/galgame-sources-2026-10.md) · [交付记录](docs/research/galgame-v037-delivery.md)。仓库保持私有；发布包不含用户 Data 或媒体。
+[0.3.7 发布包](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.7) · [使用说明](docs/releases/v0.3.7-usage.md) · [来源审计](docs/research/galgame-sources-2026-10.md) · [交付记录](docs/research/galgame-v037-delivery.md)。源码仓库现已公开；发布包不含用户 Data 或媒体。
 
 ## 0.3.6：本地观看与统一搜索（验收及正式发布完成）
 
@@ -38,7 +54,7 @@ Galgame 发现页使用 VNDB 实时封面、中文可用佳作和近两年原作
 
 当前全量 Vitest **57文件/450项**、Rust **86通过/2默认忽略**、完整浏览器 **67/67** 已通过；最后空缓存与作者/历史返回7项定向回归也通过。最终95D19A…正式便携程序使用原Data完成正常桌面验收：输入“入间人间”直接得到3部动画作品，小说列表显示16项（1项标题相关、15项作者关联），没有人物卡；实际查看柚原もけ版75条漫画目录及第60话22页信息。已用鼠标在全屏翻到第2页、验证连续滚动，并以同一正式程序重启恢复第2页。桌面快捷方式已更新至0.3.6，沿用原Data；原下载及媒体内容、12个旧exe保留。用户同时使用时修改的3条来源配置保持当前值，不回滚。TXT及自动接续主要通过模拟场景验证，目录查看不代表重新下载全卷。程序及安装包通过静态扫描，防护开启、观察窗口无新增检测；NSIS未实际安装。详细身份及证据见[本地观看及搜索记录](docs/research/local-viewing-v036.md)和[验证记录](VERIFICATION.md)；[使用说明](docs/releases/v0.3.6-usage.md)描述操作方式。
 
-**[0.3.6已正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.6)**，仓库保持私有，7个附件已实际下载回验，全部大小/SHA256/API digest一致。便携ZIP为9,556,150字节，10条目白名单、CRC及逐项hash通过，不含用户Data。正式`v0.3.6`标签固定于`427bbe48e646169e8aad8da63f8352abd2e01ac5`；后续main仅补充发布文档回执。发布[远端核验](.work/v036-evidence/github-published-verification.json)为passed，实际生成的[最终汇总](.work/v036-evidence/verification-final.json)为`allChecksPassed=true`，各项验证范围见上述记录。
+**[0.3.6已正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.6)**，发布时仓库为私有（当前已公开），7个附件已实际下载回验，全部大小/SHA256/API digest一致。便携ZIP为9,556,150字节，10条目白名单、CRC及逐项hash通过，不含用户Data。正式`v0.3.6`标签固定于`427bbe48e646169e8aad8da63f8352abd2e01ac5`；后续main仅补充发布文档回执。发布[远端核验](.work/v036-evidence/github-published-verification.json)为passed，实际生成的[最终汇总](.work/v036-evidence/verification-final.json)为`allChecksPassed=true`，各项验证范围见上述记录。
 
 实现参考了 Komga、Kavita、Mihon 官方源码中的阅读交互与进度处理，参考范围和固定提交见[研究记录](docs/research/local-reader-references-v036.md)。未复制这些项目的阅读器代码或引入新阅读器依赖，没有生成AI角色。
 
@@ -56,9 +72,9 @@ Galgame 发现页使用 VNDB 实时封面、中文可用佳作和近两年原作
 
 最终7F00…构建已通过真实35分钟被动自动刷新观察：71次采样全部有效，漫画/热门分类及进程保持，页脚从01:48:20自动更新至02:18:39，无手动刷新或失败；该长观察范围为漫画热门页。正式便携程序使用原Data重启后，两条已完成任务、两个文件名及打开入口保留，《文学少女》《链锯人》精选与封面墙正常，首屏真实封面已加载；正常退出0，防护开启且无新增检测。桌面入口和图标已更新至0.3.5，旧快捷方式已备份；六张数据表、两部成品hash和10个旧exe均保持。最终汇总 `verification-final.json` 已实际生成并核对通过。[0.3.5完整证据](docs/research/discovery-and-fixes-v035.md)与[验证记录](VERIFICATION.md)区分此前84F8…候选及最终文件，MKV打开命令不等于已播放验证。升级继续使用原 `release/v0.3.2/Data`；便携目录自己的 `START-PORTABLE.cmd` 使用独立Data，不打包用户媒体与账号。
 
-私有源码仓库：[CidneyAurum/ACGN-Hub](https://github.com/CidneyAurum/ACGN-Hub)。正式 `v0.3.5` 标签固定于 `c989cb23fc227a98cfa844338a1b23a6984b2d57`，发布核验时main与标签提交一致；后续main仅补充文档回执，不改变本版生产代码。组件归属及原始许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+公开源码仓库：[CidneyAurum/ACGN-Hub](https://github.com/CidneyAurum/ACGN-Hub)。正式 `v0.3.5` 标签固定于 `c989cb23fc227a98cfa844338a1b23a6984b2d57`，发布核验时main与标签提交一致；后续main仅补充文档回执，不改变本版生产代码。组件归属及原始许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-文档里的 `.work`、旧 `release` 和 `Library` 路径是本机历史证据或媒体位置，不随源码上传；GitHub查看这些本地链接不会得到对应文件。当前0.3.6附件可从本文开头的正式发布页取得；旧版附件保留在对应历史发布页。
+文档里的 `.work`、旧 `release` 和 `Library` 路径是本机历史证据或媒体位置，不随源码上传；GitHub查看这些本地链接不会得到对应文件。当前版本附件可从本文开头的正式发布页取得；旧版附件保留在对应历史发布页。
 
 ## 0.3.4及更早版本的历史交付
 
