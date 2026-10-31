@@ -218,7 +218,7 @@ function releasePriority(release: Release, vnId: string): number {
   const chinese = release.languages.some((language) => /^zh(?:-|$)/i.test(language.lang));
   const desktop = release.platforms.some((platform) => ["win", "lin", "mac"].includes(platform));
   const type = release.vns.find((linked) => linked.id === vnId)?.rtype;
-  return (chinese ? 100 : 0) + (release.freeware ? 60 : 0) + (type === "trial" ? 35 : 0)
+  return (chinese ? 100 : 0) + (release.freeware ? 15 : 0) + (type === "complete" ? 80 : 0)
     + (desktop ? 25 : 0) - (release.patch ? 150 : 0);
 }
 

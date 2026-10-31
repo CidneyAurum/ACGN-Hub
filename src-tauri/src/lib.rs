@@ -100,6 +100,7 @@ async fn metadata_json_request(
             | Some("api.vndb.org")
             | Some("api.github.com")
             | Some("www.kungal.com")
+            | Some("shionlib.com")
             | Some("api.mangacopy.com")
             | Some("mapi.hotmangasg.com")
             | Some("mapi.hotmangasd.com")

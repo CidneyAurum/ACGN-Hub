@@ -3,6 +3,8 @@ import type { SourceConfig } from "@/domain/source";
 import { RssSourceProvider } from "@/infrastructure/feeds/rss-source-provider";
 import { GithubReleaseSourceProvider } from "./github-release-provider";
 import { KUNGalgameSourceProvider } from "./kungal-source-provider";
+import { ShinnkuSourceProvider } from "./shinnku-source-provider";
+import { ShionlibSourceProvider } from "./shionlib-source-provider";
 import { VndbReleaseSourceProvider } from "./vndb-release-source-provider";
 import { CopyMangaSourceProvider } from "./copymanga-source-provider";
 import { JmComicSourceProvider } from "./jmcomic-source-provider";
@@ -19,6 +21,8 @@ export function createSourceProvider(config: SourceConfig, storedResources: Reso
     case "public_video": provider = new PublicVideoSourceProvider(config.url); break;
     case "github_release": provider = new GithubReleaseSourceProvider(config.url); break;
     case "kungal": provider = new KUNGalgameSourceProvider(config.url); break;
+    case "shinnku": provider = new ShinnkuSourceProvider(config.url); break;
+    case "shionlib": provider = new ShionlibSourceProvider(config.url); break;
     case "vndb_release": provider = new VndbReleaseSourceProvider({ apiUrl: config.url }); break;
     case "copymanga": provider = new CopyMangaSourceProvider(config.url, { token: config.token }); break;
     case "jmcomic": provider = new JmComicSourceProvider(); break;

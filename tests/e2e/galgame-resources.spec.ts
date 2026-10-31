@@ -70,6 +70,7 @@ test("the curated official file queues with its real URL and recognizable filena
   await page.addInitScript(() => localStorage.setItem("acgn-hub.settings.v1", JSON.stringify({ incomingDirectory: "D:\\ACGN-E2E\\Incoming" })));
   await page.goto("/#/?type=visual_novel");
   const guide = page.getByRole("region", { name: "Galgame 资源入口", exact: true });
+  await guide.locator("summary").filter({ hasText: "官方发行、试玩与免费原版参考" }).click();
   await expect(guide.getByRole("link", { name: /ATRI -My Dear Moments-/ })).toHaveAttribute("href", "https://store.steampowered.com/app/1263470/");
   await guide.getByRole("button", { name: /下载日文原版/ }).click();
   await expect(guide.getByRole("status")).toContainText("已加入下载中心");

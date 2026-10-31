@@ -1,6 +1,6 @@
 [package]
 name = "acgn-hub"
-version = "0.3.7"
+version = "0.3.8"
 description = "本地 ACGN 下载任务中心"
 authors = ["ACGN Hub"]
 edition = "2021"

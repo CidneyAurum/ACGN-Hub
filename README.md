@@ -1,4 +1,16 @@
-# ACGN Hub 0.3.7
+# ACGN Hub 0.3.8
+
+## 0.3.8：完整 Galgame 资源与实际文件下载
+
+新增 [真红小站](https://www.shinnku.com/) 文件直链和 [ShionLib](https://shionlib.com/) 多版本资源库。Galgame 首页将完整资源入口前置，官方试玩与商店参考放入折叠区。资源支持跨已启用来源查询，以及中文、Windows、本体、获取方式组合筛选；不同汉化版本、独立补丁、试玩和原声分别展示。
+
+实际核对 CLANNAD 官中、ATRI、千恋万花官中、Summer Pockets 汉化档案。最终桌面程序已将真红 ATRI 任务在正常重启后继续传输至 **22,020,096 字节**，读取到 7z 文件头并验证暂停／继续；这是人为限速的部分传输测试，没有将它当成完整游戏安装验收。ShionLib 千恋万花实测显示两个中文 Windows 译本及原站文件／哈希说明；需要在原站完成验证后获取其文件链接。
+
+修复本体被“已打补丁”字样误判、RAR 分卷漏取、多个版本只剩首条、隐藏版本被全选、同名文件撞目录、重复下载失败改写原作品关联，以及 ATRI 被英文 trial 子串误命中。游戏归档按来源与版本隔离目录，分卷保持共同目录及完整原文件名。
+
+604 项单测、80 项完整浏览器回归、最后 13 项 Galgame 回归、Rust 86 项（2 默认忽略）通过；最终桌面及扫描通过。原数据库 9 表、3 个媒体文件和 16 个旧程序保留，桌面入口更新至 0.3.8，沿用原 Data。
+
+[0.3.8 发布包](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.8) · [使用说明](docs/releases/v0.3.8-usage.md) · [真红核验](docs/research/galgame-direct-source-v038.md) · [ShionLib 核验](docs/research/galgame-secondary-sources-v038.md) · [交付记录](docs/research/galgame-v038-delivery.md)。发布包不含用户资料或游戏归档，仓库保持私有。
 
 ## 0.3.7：Galgame 发现与资源
 

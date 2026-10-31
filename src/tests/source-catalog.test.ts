@@ -30,7 +30,7 @@ describe("source catalog", () => {
     expect(forType("anime").slice(0, 2).map((item) => item.id)).toEqual(["builtin:mikan", "builtin:acgnx"]);
     expect(forType("manga").map((item) => item.type)).toEqual(["mangabz", "copymanga", "mangadex", "jmcomic"]);
     expect(forType("novel").map((item) => item.type)).toEqual(["lnovel", "archive"]);
-    expect(forType("visual_novel").map((item) => item.type)).toEqual(["kungal", "vndb_release"]);
+    expect(forType("visual_novel").map((item) => item.type)).toEqual(["shinnku", "shionlib", "kungal", "vndb_release"]);
   });
 
   it("preserves custom addresses, credentials and enablement while filtering the displayed list", () => {

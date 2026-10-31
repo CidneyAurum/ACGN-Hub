@@ -21,7 +21,9 @@ export interface SourceUsage {
 }
 
 const capabilities: Record<string, SourceCapability> = {
-  vndb_release: { label: "VNDB 官方发行", supportedTypes: ["visual_novel"], mode: "index", setup: "none", requiresDesktop: false, description: "从 VNDB 实时读取官方发行记录，优先展示中文版本、免费版和试玩。打开游戏官网或商店下载；试玩、完整版本与补丁分别标注，购买与地区条件以原站为准。" },
+  shinnku: { label: "真红小站", supportedTypes: ["visual_novel"], mode: "direct", setup: "none", requiresDesktop: true, description: "匿名检索原站文件目录，中文 Windows 归档优先；游戏本体与补丁分别标注。文件交给内置下载器，容量与分卷以原站列表为准，下载后需要自行解压。" },
+  shionlib: { label: "ShionLib", supportedTypes: ["visual_novel"], mode: "index", setup: "none", requiresDesktop: false, description: "按作品查看完整资源版本、汉化组、语言、平台、容量和原站提供的文件哈希。打开准确资源页，在原站完成验证后获取下载链接；不把验证页作为文件下载。" },
+  vndb_release: { label: "VNDB 官方发行参考", supportedTypes: ["visual_novel"], mode: "index", setup: "none", requiresDesktop: false, description: "从 VNDB 实时读取官方发行记录，中文完整版优先。作为官网与商店版本参考，试玩、完整版本和补丁分别标注，购买与地区条件以原站为准。" },
   public_video: { label: "公开投稿", supportedTypes: ["anime"], mode: "direct", setup: "python", requiresDesktop: true, description: "公开投稿可能是解说、片段或合集，先核对上传者、时长与集数。选择匿名可读取的实际画质，最高1080p；标题中的4K不代表下载画质。" },
   rss: { label: "RSS / Atom", supportedTypes: ["anime", "manga", "novel", "visual_novel"], mode: "torrent", setup: "none", requiresDesktop: true, description: "检索公开更新，确认作品与集数后下载；磁力/种子由内置 aria2 或可选 qBittorrent 处理，是否可完成取决于资源节点。" },
   mangadex: { label: "MangaDex", supportedTypes: ["manga"], mode: "manga", setup: "none", requiresDesktop: true, description: "多语漫画备用来源，保留原始章节页图。检索到原作不代表该语言有章节，请核对原作、同人和可下章节。" },
@@ -74,7 +76,7 @@ export function getSourcePriority(config: SourceConfig, mediaType?: MediaType): 
   if (!getSourceCapability(config).supportedTypes.length || mediaType && !sourceSupportsType(config, mediaType)) return 1000;
   const feed = rssKind(config);
   if (feed) return feed === "mikan" ? 10 : feed === "acgnx" ? 20 : feed === "anime" ? 30 : 40;
-  const priorities: Record<string, number> = { mangabz: 10, copymanga: 20, lnovel: 10, kungal: 10, vndb_release: 20, mangadex: 60, public_video: 70, archive: 80, jmcomic: 90, github_release: 300 };
+  const priorities: Record<string, number> = { mangabz: 10, copymanga: 20, lnovel: 10, shinnku: 5, shionlib: 10, kungal: 20, vndb_release: 100, mangadex: 60, public_video: 70, archive: 80, jmcomic: 90, github_release: 300 };
   return priorities[config.type] ?? 1000;
 }
 
@@ -88,6 +90,8 @@ export function getSourceUsage(config: SourceConfig): SourceUsage {
   const feed = rssKind(config);
   if (feed) return { ...common, tier: feed === "custom" ? "custom" : "primary", label: feed === "custom" ? "自定义订阅" : "动画主源", format: feed === "custom" ? "附件 / 磁力 / Torrent" : "磁力 / Torrent", language: feed === "custom" ? "语言由订阅内容决定" : "字幕组发布 · 核对字幕语言" };
   switch (config.type) {
+    case "shinnku": return { ...common, tier: "primary", label: "游戏文件", format: "HTTP 游戏归档", language: "中文目录优先 · 版本依原站标注" };
+    case "shionlib": return { ...common, tier: "index", label: "多版本资源库", format: "完整资源页 · 原站验证", language: "汉化版本 / 语言 / 平台可选" };
     case "mangabz": return { ...common, tier: "primary", label: "中文漫画", format: "原站页图 · CBZ", language: "中文" };
     case "copymanga": return { ...common, tier: "primary", label: "中文漫画", format: "原站图片 · CBZ", language: "中文" };
     case "lnovel": return { ...common, tier: "primary", label: "中文轻小说", format: "分卷正文 · TXT", language: "中文" };

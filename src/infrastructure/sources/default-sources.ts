@@ -25,6 +25,16 @@ export const DEFAULT_GITHUB_SOURCE_PRESETS: readonly DefaultGithubSourcePreset[]
 const DEFAULT_SOURCE_TIMESTAMP = "2026-08-17T00:00:00.000Z";
 
 export const DEFAULT_RESOURCE_SOURCE_CONFIGS: readonly SourceConfig[] = [
+  {
+    id: "builtin:shinnku", type: "shinnku", name: "真红小站 · 游戏文件",
+    url: "https://www.shinnku.com", enabled: false,
+    createdAt: "2026-10-31T00:00:00.000Z", updatedAt: "2026-10-31T00:00:00.000Z",
+  },
+  {
+    id: "builtin:shionlib", type: "shionlib", name: "ShionLib · 游戏资源库",
+    url: "https://shionlib.com", enabled: false,
+    createdAt: "2026-10-31T00:00:00.000Z", updatedAt: "2026-10-31T00:00:00.000Z",
+  },
   { id: "builtin:mangabz", type: "mangabz", name: "MangaBZ · 中文日漫", url: "https://mangabz.com", enabled: false, createdAt: "2026-10-30T00:00:00.000Z", updatedAt: "2026-10-30T00:00:00.000Z" },
   {
     id: "builtin:public-video",

@@ -51,6 +51,17 @@ it("never applies anime-season warnings to Galgame full-save archives in search 
   expect(reloaded.resources[0].metadata.matchWarnings).toEqual([]);
 });
 
+it("keeps bounded same-game file editions from Shinnku rather than hiding alternatives after the first archive", async () => {
+  const provider = providerFixture();
+  provider.supportedTypes.splice(0, 1, "visual_novel");
+  vi.mocked(provider.search).mockResolvedValue(Array.from({ length: 12 }, (_, index) => ({ sourceId: "shinnku", sourceItemId: `file:edition${index}`, title: "亚托莉", aliases: ["ATRI"] })));
+  vi.mocked(provider.listResources).mockImplementation(async (id) => [{ id, sourceId: "shinnku", sourceItemId: id, title: `亚托莉 ${id}.7z`, protocol: "http", targetUrl: `https://files.example/${id}.7z`, metadata: { downloadMode: "direct_file" }, createdAt: "2026-10-31" }]);
+  const found = await discoverResources({ keyword: "亚托莉", mediaType: "visual_novel", sources: [{ ...source, type: "shinnku" }] }, () => provider);
+  expect(found.items).toHaveLength(8);
+  expect(new Set(found.items.map((item) => item.resource.sourceItemId)).size).toBe(8);
+  expect(provider.listResources).toHaveBeenCalledTimes(8);
+});
+
 const archiveSource: SourceConfig = { ...source, id: "archive", type: "archive", name: "公开档案", url: "https://archive.org" };
 function archiveDurationFixture() {
   return new InternetArchiveSourceProvider(undefined, { fetcher: async (url) => ({ status: 200, json: async () => url.includes("/advancedsearch.php")

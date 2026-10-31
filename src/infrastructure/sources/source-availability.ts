@@ -3,6 +3,8 @@ import type { SourceConfig } from "@/domain/source";
 /** Describes adapter capabilities; this is deliberately not a health result. */
 export function sourceDescription(config: SourceConfig): string {
   switch (config.type as string) {
+    case "shinnku": return "原站游戏档案目录，支持匿名检索和内置 HTTP 文件下载；保留完整压缩包名与分卷，解压后再添加本地游戏。";
+    case "shionlib": return "公开的多版本游戏资源库，显示容量、汉化组与原站文件哈希；链接需要在原站完成验证后获取。";
     case "public_video": return "公开投稿搜索与 MP4 下载；先核对时长、上传者和集数。仅游客可访问的视频，不读取浏览器账号或 Cookie。";
     case "nyaa":
     case "anime_garden": return "旧版动漫来源配置，现按 RSS / Atom 读取。请先确认地址是可读取的订阅链接，再检查连接。";

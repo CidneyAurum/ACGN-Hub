@@ -156,5 +156,5 @@ function isSourceConfig(value: unknown): value is SourceConfig {
 }
 
 function isSourceType(value: unknown): value is SourceConfig["type"] {
-  return value === "rss" || value === "github_release" || value === "nyaa" || value === "kungal" || value === "vndb_release" || value === "copymanga" || value === "jmcomic" || value === "mangadex" || value === "mangabz" || value === "weebcentral" || value === "kuaikan" || value === "archive" || value === "anime_garden" || value === "lnovel" || value === "public_video";
+  return value === "rss" || value === "github_release" || value === "nyaa" || value === "kungal" || value === "shinnku" || value === "shionlib" || value === "vndb_release" || value === "copymanga" || value === "jmcomic" || value === "mangadex" || value === "mangabz" || value === "weebcentral" || value === "kuaikan" || value === "archive" || value === "anime_garden" || value === "lnovel" || value === "public_video";
 }

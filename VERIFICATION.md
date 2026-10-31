@@ -1,5 +1,23 @@
 # ACGN Hub 0.3 验证记录
 
+## 最新增量：0.3.8 Galgame 完整资源整合
+
+| 验证 | 结果与范围 |
+| --- | --- |
+| 全量单测 | 61 文件／604 项通过，`.work/v038-final-vitest.json` |
+| 完整浏览器回归 | 80 项通过，`.work/e2e/v038-full-results/.last-run.json` |
+| 最后 Galgame 回归 | 13 项通过，`.work/e2e/v038-final-galgame/.last-run.json` |
+| Rust | 86 通过、2 默认忽略、0 失败；新增 JSON 来源使用相同代理边界 |
+| 最终原生验收 | `.work/v038-evidence/native-verification.json` 全部通过；Windows UIAutomation、隔离测试资料，无 CDP、脚本注入或 Cookie 读取 |
+| 实际数据传输 | 真红 ATRI 总长 3,781,414,904 字节，初候选收到 14,516,224；最终程序重启后继续到 22,020,096，并暂停；7z 魔数正确、独立版本目录、文件名正确。人为限速 256 KiB/s，不用于评价源站速度，未完整下载或运行 |
+| 实际独立目录 | 最终 ShionLib 千恋万花显示官方中文与汉化组两个版本；源站哈希明确标注未校验本地文件；两源联合查询实际 7 候选；ATRI 修正为 3 候选，无 trial 误命中 |
+| 最终静态扫描 | exe `6298FC5235A0A8FEC584703AE98D7D3ADD34BA61689C50E01B3D9AD2AC56E255`；NSIS `C997C9D294B818D61329F0090B51BCA4E60DA989470A2FD5DF5BEAC99129B48A`；`.work/security-audit/v038-release-final-scan.json`，NSIS 未实际安装 |
+| 用户资料保留 | 9 表／3 媒体文件／16 旧程序保持，DB 完整性 ok；`.work/v038-evidence/data-preservation.json` |
+| 桌面入口 | `START-ACGN-0.3.8.cmd` 使用原 `release/v0.3.2/Data`，图标取新 exe；`.work/v038-evidence/shortcut-verification.json` |
+| 便携包 | 9,578,019 字节、10 条目白名单、CRC 及逐项 hash 通过，不含用户资料和游戏档案；`.work/v038-evidence/delivery-assets.json` |
+
+最终程序与初候选身份、公开来源协议及限制详见 [0.3.8 交付记录](docs/research/galgame-v038-delivery.md)。发布地址为 [私有 GitHub 0.3.8](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.3.8)，最终远端及回验回执保存在本机 `.work/v038-evidence/`。
+
 ## 最新增量：0.3.7 Galgame 发现与资源
 
 最终程序 SHA256 `C461B9EB29B7327271FB4F6B85A54529E389588F84889B71BF8955EE7924D781`，NSIS 为 `C729E4A6A586687DEB2897EAC5C5290E51A457746AA9EABA6E450BA8FD09953F`。最终程序以隔离测试资料完成 Windows UIAutomation 原生验收，未读取浏览器 Cookie，未使用 CDP／注入脚本或修改防护。安装包未实际安装。

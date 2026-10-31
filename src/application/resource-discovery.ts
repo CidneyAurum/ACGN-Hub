@@ -109,7 +109,9 @@ export async function discoverResources(input: ResourceDiscoveryInput, factory: 
     // ranges (for example an 18-chapter short edition versus a 60-chapter
     // complete edition). The user must see and choose the correct work.
     const bookChoices = candidates.filter((candidate) => candidate.score >= 80);
-    const choices = isFeed ? candidates.slice(0, 24) : input.mediaType === "manga" || input.mediaType === "novel"
+    const fileEditions = input.mediaType === "visual_novel" && candidates[0].config.type === "shinnku";
+    const choices = fileEditions ? (bookChoices.length ? bookChoices : candidates.slice(0, 1)).slice(0, 8)
+      : isFeed ? candidates.slice(0, 24) : input.mediaType === "manga" || input.mediaType === "novel"
       ? (bookChoices.length ? bookChoices : candidates.slice(0, 1)).slice(0, 12)
       : candidates.slice(0, 1);
     for (const choice of choices) {

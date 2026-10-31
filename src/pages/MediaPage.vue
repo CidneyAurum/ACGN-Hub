@@ -33,6 +33,7 @@ import { useTrackingStore, type TrackingStatus } from "@/stores/tracking";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { downloadPublicVideo } from "@/infrastructure/video/tauri-public-video-service";
 import { isTauriRuntime } from "@/shared/runtime";
+import { compareGalgameResources, emptyGalgameResourceFilters, galgameDownloadDirectory, galgameDownloadFileName, matchesGalgameResource, resourceMatchesKeywords } from "@/domain/galgame-resource";
 
 const route = useRoute();
 const library = useMediaLibraryStore();
@@ -65,9 +66,11 @@ const resourceNotice = ref("");
 const completedLocalTaskId = ref("");
 const addingResourceId = ref("");
 const resourceQuery = ref("");
+const galgameFilters = ref(emptyGalgameResourceFilters());
 const sourceSearchKeyword = ref("");
 const resourceProtocol = ref<"all" | ResourceItem["protocol"]>("all");
 const resourceSourceFilter = ref("");
+const resourceWorkFilter = ref("all");
 const selectedResourceIds = ref<string[]>([]);
 const batchAdding = ref(false);
 const manualResourceUrl = ref("");
@@ -99,27 +102,17 @@ const resourceSourceOptions = computed(() => {
     });
 });
 const visibleResources = computed(() => {
-  const query = resourceQuery.value.trim().toLocaleLowerCase();
+  const isGalgame = media.value?.type === "visual_novel";
   return resources.value.filter((resource) => {
     if (resourceSourceFilter.value && resourceSourceFilter.value !== "all" && resource.sourceId !== resourceSourceFilter.value && resource.sourceId !== "manual") return false;
     if (resourceProtocol.value !== "all" && resource.protocol !== resourceProtocol.value) return false;
-    if (!query) return true;
-    const searchable = [
-      resource.title,
-      resource.format,
-      resource.language,
-      resource.resolution,
-      resource.protocol,
-      resource.metadata.resourceTypeLabel,
-      typeof resource.metadata.searchTerms === "string" ? resource.metadata.searchTerms : undefined,
-      ...(Array.isArray(resource.metadata.searchTerms) ? resource.metadata.searchTerms.filter((value): value is string => typeof value === "string") : []),
-      ...(Array.isArray(resource.metadata.platformLabels) ? resource.metadata.platformLabels.filter((value): value is string => typeof value === "string") : []),
-    ].filter(Boolean).join(" ").toLocaleLowerCase();
-    return searchable.includes(query);
-  }).sort((left, right) => resourceLanguageScore(right) - resourceLanguageScore(left));
+    if (isGalgame && !matchesGalgameResource(resource, galgameFilters.value)) return false;
+    return resourceMatchesKeywords(resource, resourceQuery.value);
+  }).sort((left, right) => isGalgame ? compareGalgameResources(left, right) : resourceLanguageScore(right) - resourceLanguageScore(left));
 });
+const activeVersionResources = computed(() => visibleResources.value.filter((resource) => resourceWorkFilter.value === "all" || `${resource.sourceId}:${resource.sourceItemId}` === resourceWorkFilter.value));
 const allVisibleSelected = computed(() =>
-  visibleResources.value.some((resource) => resource.metadata.downloadMode !== "external_link") && visibleResources.value.filter((resource) => resource.metadata.downloadMode !== "external_link").every((resource) => selectedResourceIds.value.includes(resource.id)),
+  activeVersionResources.value.some((resource) => resource.metadata.downloadMode !== "external_link") && activeVersionResources.value.filter((resource) => resource.metadata.downloadMode !== "external_link").every((resource) => selectedResourceIds.value.includes(resource.id)),
 );
 onMounted(() => void load());
 watch(() => route.params.id, () => void load());
@@ -141,6 +134,7 @@ async function load(): Promise<void> {
   manualResourceUrl.value = "";
   manualResourceTitle.value = "";
   resourceQuery.value = "";
+  galgameFilters.value = emptyGalgameResourceFilters();
   resourceProtocol.value = "all";
   selectedResourceIds.value = [];
   resourceLoading.value = false;
@@ -152,6 +146,7 @@ async function load(): Promise<void> {
   resourceNotice.value = "";
   completedLocalTaskId.value = "";
   resourceSourceFilter.value = "";
+  resourceWorkFilter.value = "all";
   manualAdding.value = false;
   batchAdding.value = false;
   loading.value = true;
@@ -382,7 +377,9 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
     const associatedResource = { ...resource, mediaId: targetMedia.id };
     if (!resourceRepository) await initializeResourceRepository();
     if (!resourceRepository) throw new Error("资源记录存储尚未就绪");
-    await resourceRepository.upsert(associatedResource);
+    // A rejected duplicate must not replace the original work's association.
+    const deferGameAssociation = targetMedia.type === "visual_novel";
+    if (!deferGameAssociation) await resourceRepository.upsert(associatedResource);
     const settings = loadSettings();
     if (resource.metadata.downloadMode === "public_video") {
       const outputRoot = settings.libraryDirectory;
@@ -500,11 +497,17 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
     const target = provider ? await provider.resolve(resource.id) : parseDownloadTarget(resource.targetUrl);
     const configuredDirectory = settings.downloadDirectory || settings.incomingDirectory;
     const friendlyName = sanitizeFileName(resource.title, "未命名资源");
-    const directory = configuredDirectory;
+    const directory = targetMedia.type === "visual_novel" ? await galgameDownloadDirectory(configuredDirectory, resource, targetMedia.title) : configuredDirectory;
     const extension = target.filename?.match(/\.[a-z0-9]{2,8}$/i)?.[0] ?? "";
-    const filename = `${friendlyName}${extension}`;
+    const filename = targetMedia.type === "visual_novel" && target.protocol === "http"
+      ? galgameDownloadFileName(resource, target.filename) : `${friendlyName}${extension}`;
     await downloadStore.add(target.url, directory, { mediaId: targetMedia.id, resourceId: resource.id, sourceName: sourceConfig?.name, filename });
-    if (generation === loadGeneration) resourceNotice.value = `已加入下载中心：${resource.title}`;
+    let associationWarning = "";
+    if (deferGameAssociation) {
+      try { await resourceRepository.upsert(associatedResource); }
+      catch { associationWarning = "下载已加入，但作品资源关联未能保存。请到下载中心查看任务，避免重复添加。"; }
+    }
+    if (generation === loadGeneration) resourceNotice.value = associationWarning || `已加入下载中心：${resource.title}`;
     return true;
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : typeof cause === "string" ? cause : "加入下载失败";
@@ -558,7 +561,8 @@ async function addManualResource(): Promise<void> {
       resourceSourceNames.set(resource.id, "手动链接");
     }
     const settings = loadSettings();
-    const directory = settings.downloadDirectory || settings.incomingDirectory;
+    const configuredDirectory = settings.downloadDirectory || settings.incomingDirectory;
+    const directory = targetMedia.type === "visual_novel" ? await galgameDownloadDirectory(configuredDirectory, resource, targetMedia.title) : configuredDirectory;
     await downloadStore.add(target.url, directory, { mediaId: targetMedia.id, resourceId: resource.id, sourceName: "手动链接" });
     if (generation === loadGeneration) {
       manualResourceUrl.value = "";
@@ -573,14 +577,15 @@ async function addManualResource(): Promise<void> {
 }
 
 function toggleResource(resourceId: string): void {
-  if (resources.value.find((resource) => resource.id === resourceId)?.metadata.downloadMode === "external_link") return;
+  const resource = activeVersionResources.value.find((resource) => resource.id === resourceId);
+  if (!resource || resource.metadata.downloadMode === "external_link") return;
   selectedResourceIds.value = selectedResourceIds.value.includes(resourceId)
     ? selectedResourceIds.value.filter((id) => id !== resourceId)
     : [...selectedResourceIds.value, resourceId];
 }
 
 function toggleAllVisible(): void {
-  const visibleIds = visibleResources.value.filter((resource) => resource.metadata.downloadMode !== "external_link").map((resource) => resource.id);
+  const visibleIds = activeVersionResources.value.filter((resource) => resource.metadata.downloadMode !== "external_link").map((resource) => resource.id);
   selectedResourceIds.value = allVisibleSelected.value
     ? selectedResourceIds.value.filter((id) => !visibleIds.includes(id))
     : [...new Set([...selectedResourceIds.value, ...visibleIds])];
@@ -589,7 +594,7 @@ function toggleAllVisible(): void {
 async function addSelectedResources(): Promise<void> {
   if (addingResourceId.value || batchAdding.value) return;
   const generation = loadGeneration;
-  const selected = visibleResources.value.filter((resource) => resource.metadata.downloadMode !== "external_link" && selectedResourceIds.value.includes(resource.id));
+  const selected = activeVersionResources.value.filter((resource) => resource.metadata.downloadMode !== "external_link" && selectedResourceIds.value.includes(resource.id));
   if (!selected.length) return;
   batchAdding.value = true;
   let failed = 0;
@@ -705,7 +710,7 @@ function isAbsoluteWindowsPath(value: string): boolean {
       <SubjectHero :media="media" :details="details" :saved="saved" :tracking="tracking" :busy="saving" @save="toggleSaved" @resources="openResources" @status="setTrackingStatus" @advance="advanceTracking" />
       <p v-if="saveError || library.error || media.metadata.sourceSaveError" class="subject-inline-error" role="alert">{{ saveError || library.error || media.metadata.sourceSaveError }}；这不会影响当前作品的资料浏览。</p>
       <p v-if="metadataNotice" class="subject-inline-note">{{ metadataNotice }}</p>
-      <SubjectResourcePanel :media-type="media.type" v-if="resourcePanelOpen || resources.length" v-model:source="resourceSourceFilter" v-model:keyword="sourceSearchKeyword" v-model:filter="resourceQuery" v-model:protocol="resourceProtocol" v-model:manual-url="manualResourceUrl" v-model:manual-title="manualResourceTitle" :options="resourceSourceOptions" :resources="visibleResources" :selected="selectedResourceIds" :loading="resourceLoading" :queried="resourceSearchRequested" :error="resourceError" :notice="resourceNotice" :adding="addingResourceId" :batch-adding="batchAdding" :source-names="sourceNamesView" :group-titles="resourceGroupTitles" :warnings="resourceWarnings" :manual-adding="manualAdding" :exact="!!exactSource" @search="requestResourceSearch" @enable="enableSourceAndSearch" @add="addResource" @batch="addSelectedResources" @toggle="toggleResource" @toggle-all="toggleAllVisible" @manual="addManualResource" />
+      <SubjectResourcePanel :media-type="media.type" v-if="resourcePanelOpen || resources.length" v-model:source="resourceSourceFilter" v-model:work="resourceWorkFilter" v-model:keyword="sourceSearchKeyword" v-model:filter="resourceQuery" v-model:protocol="resourceProtocol" v-model:galgame-filters="galgameFilters" v-model:manual-url="manualResourceUrl" v-model:manual-title="manualResourceTitle" :options="resourceSourceOptions" :resources="visibleResources" :total-count="resources.length" :selected="selectedResourceIds" :loading="resourceLoading" :queried="resourceSearchRequested" :error="resourceError" :notice="resourceNotice" :adding="addingResourceId" :batch-adding="batchAdding" :source-names="sourceNamesView" :group-titles="resourceGroupTitles" :warnings="resourceWarnings" :manual-adding="manualAdding" :exact="!!exactSource" @search="requestResourceSearch" @enable="enableSourceAndSearch" @add="addResource" @batch="addSelectedResources" @toggle="toggleResource" @toggle-all="toggleAllVisible" @manual="addManualResource" />
       <div v-if="completedLocalTaskId && localDownloadStore.ownedOutputPath(completedLocalTaskId)" class="form-footer"><span class="success-message">下载完成，已可离线观看</span><RouterLink class="primary-button" :to="'/viewer/local/' + encodeURIComponent(completedLocalTaskId)">{{ media.type === 'anime' ? '立即播放' : '立即阅读' }}</RouterLink></div>
       <div class="subject-information-grid">
         <section class="subject-story"><header><h2>关于这部作品</h2><span>{{ details?.airDate || (media.releaseYear ? media.releaseYear + ' 年' : '') }}</span></header><p>{{ details?.summary || media.description || '暂时没有简介。来源作品可以先查看章节和文件，资料后续仍可补充。' }}</p><div v-if="details?.tags.length" class="subject-topic-tags"><span v-for="tag in details.tags.slice(0, 12)" :key="tag">{{ tag }}</span></div><p v-if="detailsError" class="subject-inline-note">{{ detailsError }}</p></section>

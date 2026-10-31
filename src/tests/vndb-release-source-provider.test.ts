@@ -47,7 +47,7 @@ describe("VNDB official distribution and trial source", () => {
     ];
     const fetcher = vi.fn<JsonFetcher>().mockResolvedValueOnce(json(200, { results: [game] })).mockResolvedValueOnce(json(200, { results: editions }));
     const source = provider(fetcher); await source.search(query); const resources = await source.listResources("v20424");
-    expect(resources.map((resource) => resource.metadata.vndbReleaseId)).toEqual(["r4", "r1", "r2", "r3"]);
+    expect(resources.map((resource) => resource.metadata.vndbReleaseId)).toEqual(["r1", "r4", "r3", "r2"]);
     expect(resources.find((resource) => resource.metadata.vndbReleaseId === "r2")).toMatchObject({
       title: expect.stringContaining("试玩版"), metadata: { resourceLabel: "试玩版 · 免费发行", warnings: expect.arrayContaining(["试玩版只包含体验内容，不是完整游戏。"]) },
     });
