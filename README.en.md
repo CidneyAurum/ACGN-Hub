@@ -56,7 +56,7 @@ One Android APK includes **arm64-v8a and x86_64**, with a minimum of **Android 8
 | Windows game launch and save tools | Supported for the corresponding local workflow | Unsupported |
 | Portable profile migration | Move the complete `Data` directory | Private application storage; no Windows portable mode |
 
-Android downloads require the application to remain running. Native HTTP tasks save checkpoints and recover paused after a restart; resuming depends on server support. There is no system background download service, so continuous lock-screen or background transfers are not promised. CBZ, TXT and unencrypted EPUB use the built-in readers; video playback depends on Android WebView and installed codecs. Profiles are separate, without automatic cross-platform synchronization. See the [build and verification record](docs/research/android-v050.md) for tested samples and device scope.
+Android downloads require the application to remain running. Native HTTP tasks save checkpoints and recover paused after a restart; resuming depends on server support. There is no system background download service, so continuous lock-screen or background transfers are not promised. CBZ, TXT and unencrypted EPUB use the built-in readers; video playback depends on Android WebView and installed codecs. Profiles are separate, without automatic cross-platform synchronization. See the [0.5.3 guide](docs/releases/v0.5.3-usage.md#验证结果与范围) for current sample scope and the [Android record](docs/research/android-v050.md) for the base build setup.
 
 ## Source capabilities
 
