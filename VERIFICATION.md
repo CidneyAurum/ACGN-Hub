@@ -1,5 +1,38 @@
 # ACGN Hub 验证记录
 
+## 最新增量：0.5.0 Windows / Android（构建与原生样本通过，待发布附件回验）
+
+最终 Windows EXE / NSIS、便携 ZIP 和 Android APK 已完成本地打包、静态检查与原生样本验证；综合清单与桌面入口已更新，原用户数据最后复核保持。仅待 GitHub 源码 / 标签及 9 附件上传后的实际下载回验，没有提前记作发布完成。各阶段只按自身文件身份记录，不把旧候选下载移记到最终包。
+
+| 检查 | 当前证据与范围 |
+| --- | --- |
+| 前端单测 | 最终 `.work/v050-evidence/unit-delivery.json` 为 **65 文件 / 670 项通过，0 失败，success=true**。此前 666 / 669 项报告另存，不相加；嵌套 suite 不当作文件数 |
+| 类型检查 | 上一冻结阶段类型检查退出 **0**；执行会话 99882。类型检查不代替生产打包与原生运行 |
+| Rust 回归 | 最终 `.work/v050-evidence/native-delivery.log` 为 **109 通过 / 2 默认忽略 / 0 失败**，覆盖等价私有目录边界、自动整理及平台不支持入口。Windows 主机执行不等于 Android 设备运行 |
+| 完整浏览器交互 | 最近完整运行 **91 项通过，0 失败、0 跳过、0 flaky**；`.work/v050-evidence/browser-frozen.json`，退出 0。其后最后补充仅为任务可选状态与管理器测试，没有布局变化，未宣称最终 670 项源码重新跑过整轮浏览器；早期失败及各阶段记录保留、不相加 |
+| Android 双 ABI 构建 | 最终 `apk-delivery-verification.json` 对应 `ACGN-Hub-0.5.0-android-delivery.apk`，**54,866,502 字节**，SHA256 `2F8A9B9D0241561A8ABFBA88010E8EB6F734C551F924729EF02B25EFAC5D6E48`；包名 `local.acgnhub.mobile`、0.5.0 / 5000、minSdk 26 / targetSdk 36，arm64-v8a + x86_64。v2 / v3 签名、CRC、16 KiB ZIP / ELF 对齐通过，无私钥、用户资料及 Windows 可执行文件 |
+| 保存修复前 APK 身份 | `.work/android-v050/apk-final2-verification.json` 对应 `ACGN-Hub-0.5.0-android-candidate-final2.apk`，**54,796,870 字节**，SHA256 `04B8F26CA0AD6ADD21DB4A1BB17E7FBC6A648B92B21A181EDB2796E2FA9F0E2D`；包名 `local.acgnhub.mobile`，版本名 0.5.0、versionCode 5000、minSdk 26、targetSdk 36。该候选不能当作保存修复后的最终 APK |
+| 保存修复前 APK 静态校验 | 上述候选的 v2 / v3 签名、ZIP CRC、16 KiB ZIP 对齐通过；两种 ELF 的 PT_LOAD 对齐均为 16,384，无签名材料、用户资料或 Windows 可执行文件。其原生保存失败后已修复，最终包另有独立校验，不移用旧候选结论 |
+| 最终 Android HTTP | 独立 API 35 模拟器新建 Gutenberg `pg10.txt` 约 4.2 MB 任务，64 KiB/s 传输到约 2.3 MB 暂停，`am force-stop` 后冷启动仍暂停，继续至完成。阅读按钮实际加载正文，系统选择器打开并取消、无发送；见 `delivery-http-new-progress/paused/after-resume`、`delivery-paused-visible`、`delivery-completion-actions`、`delivery-http-export`、`delivery-http-text-loaded` 的 XML。旧 `pg2600` 完成属于此前阶段，不混记 |
+| 最终 Android 小说 / 进度 | 最终包重新下载《文学少女》第二卷 **12 / 12** 并内读，上一卷 / 下一卷实际切换；第一卷恢复第二章 / 滚动，已有第 34 话 21 页 CBZ 恢复第 3 页，后两项为读取阶段成品，未在最终包重下漫画。见 `delivery-volume2-*`、`delivery-series-*`、`delivery-literary-restored.xml`、`delivery-manga-restored.xml` |
+| 最终 Android 系统返回 | 首页系统返回进入后台后 PID 10317 保留，再打开成功、无崩溃，见 `delivery-back-background.json` / `.xml`。不据此承诺杀进程后的后台传输 |
+| 最终 Android 独立汇总 | `.work/v050-evidence/android-delivery-native.json` 的 `passedWithinDocumentedScope=true`，汇集 25 份证据的 XML、截图 / 哈希与当前进程检查；执行 ABI 为 x86_64，ARM64 仅完成构建及静态检查。首卷正文恢复到第二章，但可见章节选择器仍标第一章，按实际正文位置描述，不声称该标签同步已验通过 |
+| Android 后续阶段样本 | `90F7EB…` 完整下载《文学少女》首卷、MangaBZ 第 34 话 21 页 CBZ，并实际全屏长滚、按钮至第 2 页、触屏至第 3 页。`ECDB6E…` 覆盖升级保留两任务 / 进度，TXT 和 CBZ 选择器均打开取消，无发送，横屏 / 全屏及热恢复另有记录。这些阶段包与最终 `2F8A9B…` 分开，完整身份见 [Android 记录](docs/research/android-v050.md) |
+| 最终 Windows 构建与扫描 | EXE **25,907,200 字节**，SHA256 `3C5AF9EBB6B993A5B824FC858BEDEE0FDAF97AFEC081B388D10F8FF89B2A4D24`；NSIS **7,301,383 字节**，SHA256 `1516002E1E38EA46FC063D35E24C55A609A45F054EB0030AE353A47B9E481F64`。`.work/security-audit/v050-delivery-final.json` 两项扫描退出 0、未发现威胁、防护开启、无新增事件、扫描前后哈希保持；NSIS 未实际安装 |
+| Windows 实际小说流程 | 独立资料库正常 UI 已显示首页真实封面、检索 LNovel 88《文学少女》、下载两卷 TXT 并在应用内阅读。首卷 242,459 字节 / 83,192 字符，第二卷 342,612 字节 / 118,813 字符，均与已有完整样本 SHA256 一致；见 `.work/v050-evidence/windows-novel-outputs.json` 及对应首页、检索、两卷阅读回执 |
+| Windows 实际漫画与重启 | 独立资料库完成《葬送的芙莉莲》一话 **39 页 CBZ**，9,357,847 字节、ZIP CRC 通过，SHA256 `2738AB0F7A1E2851C34D5B2F6ECEA78C517E377B0D6122F55ED5CE24629E9773`；见 `windows-comic-outputs.json` 与阅读截图。正常重启后的下载与小说阅读界面分别有 `windows-restart-downloads.json`、`windows-reader-restored.json`，全屏界面有 `windows-reader-fullscreen.json`，不将快照泛化为所有交互的自动断言 |
+| Windows 阶段正常程序复验 | `windows-release-native-final.json` 对应 `6F8270F7B71E8944A8306956C83FF4BA8FBDB2D635F4663E0EB7A39E958D86B5`：UIAutomation 确认 4 项完成记录、小说章节 / 章内滚动和漫画第 2 页重启恢复，两次正常退出 0、无新增检测、未重下成品。该阶段与后续最终 `3C5AF9…` 分开，不因回执名 `final` 混为最终身份 |
+| 最终 Windows 原生 | `windows-delivery-native.json` 对应最终 `3C5AF9…` 程序：UIAutomation 读取隔离资料库 4 项已有完成记录，39 页漫画图像可读且恢复第 2 页，小说 7 章可读且恢复第二章 / 章内滚动。未重新下载既有成品、未启动原用户资料库；正常退出 0、进程结束、无新增检测 |
+| 原用户数据保留 | `.work/v050-evidence/data-preservation.json` 最后 `2026-11-02T00:48:32Z`，**allPreserved=true**、数据库完整性 **ok**；原 **9 表、3 媒体、22 旧 EXE** 与基线保持，不记录私有值、不沿用旧版结果 |
+| 便携 ZIP / 综合清单 | `portable-delivery.json`：**9,670,512 字节**，SHA256 `8E504D7C7A0DA396CEE04BC804811D72944D821173E39FA2AA609D3BD4D4490F`；12 白名单成员、CRC / 逐项哈希通过，无用户 Data / 媒体。`RELEASE-ASSETS.json` 和 `CHECKSUMS-SHA256.txt` 已覆盖四产物，Windows 自身 `VERSION.json` / `SHA256SUMS.txt` 保留 |
+| 桌面入口 | `desktop-shortcut-delivery.json` 记录入口切至 `START-ACGN-0.5.0.cmd`、新版图标并继续沿用原 `release/v0.3.2/Data`；旧快捷方式已备份 |
+| 尚待完成的交付项 | 仅 GitHub 源码 / 标签与 9 附件上传摘要、实际下载回读、public / main / tag 身份核对 |
+| GitHub 交付 | 尚未发布 0.5.0；最终附件、远端身份及实际下载回验尚待完成 |
+
+APK SHA256 标识文件内容，签名证书 SHA256 指纹为 `40C95E2A527E537C9DA136667095B982F9402A969953D8F8C0D1A64BE34744A8`，二者分别记录。私钥和口令不进入公开证据或发布附件。本地 `.work` 回执不随源码上传；公开构建方法与验证边界见 [Android 0.5.0 记录](docs/research/android-v050.md)。
+
+发布资产清单已由 `scripts/create-crossplatform-manifest.py` 生成；远端附件回验完成前不写发布完成。原生样本限本机 Windows 与独立 Android API 35 模拟器，未测实体手机、全部 API 26+、ARM64 物理设备或 16 KiB 页面设备。选择器仅打开并取消，无对外发送或公共目录保存验证；持续后台下载、完整 Galgame 安装运行和 NSIS 实际安装均未验收。
+
 ## 最新增量：0.4.0 来源可靠性与便携迁移
 
 | 检查 | 实际结果 |

@@ -4,9 +4,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { useDownloadStore } from "@/stores/download";
 import { loadSettings } from "@/shared/settings";
 import type { DownloadTask } from "@/domain/download";
-import { getCompletedDownloadOutputs, type DownloadOutput } from "@/domain/download-output";
+import { getCompletedDownloadFiles, getCompletedDownloadOutputs, type DownloadOutput } from "@/domain/download-output";
 import type { LocalDownloadTask } from "@/domain/local-download";
-import { isTauriRuntime } from "@/shared/runtime";
+import { isAndroidRuntime, isTauriRuntime } from "@/shared/runtime";
 import { useLocalDownloadStore } from "@/stores/local-download";
 import { useRouter } from "vue-router";
 import { parsePublicVideoInput } from "@/infrastructure/sources/public-video-source-provider";
@@ -14,6 +14,7 @@ import { getLocalViewerKind } from "@/domain/local-viewer";
 import { buildViewerSeries, type ViewerSeries } from "@/domain/viewer-series";
 
 const store = useDownloadStore();
+const android = isAndroidRuntime();
 const localStore = useLocalDownloadStore();
 const router = useRouter();
 const url = ref("");
@@ -30,7 +31,7 @@ function configuredOutputRoots(): string[] {
   const settings = loadSettings();
   return [settings.libraryDirectory, settings.incomingDirectory, settings.downloadDirectory].filter(Boolean);
 }
-const outputChoices = computed(() => Object.fromEntries(store.tasks.map((task) => [task.id, getCompletedDownloadOutputs(task, configuredOutputRoots())])));
+const outputChoices = computed(() => Object.fromEntries(store.tasks.map((task) => [task.id, (android ? getCompletedDownloadFiles : getCompletedDownloadOutputs)(task, configuredOutputRoots())])));
 const completedSeries = computed(() => {
   const groups: ViewerSeries[] = [];
   const seen = new Set<string>();
@@ -88,6 +89,7 @@ async function submit(): Promise<void> {
   try {
     const publicVideo = parsePublicVideoInput(url.value);
     if (publicVideo) {
+      if (android) throw new Error("B站投稿链接需要电脑版解析与下载；安卓端请添加 HTTP/HTTPS 文件直链");
       await router.push({ path: "/resources", query: { type: "anime", q: publicVideo.url, provider: "public_video" } });
       return;
     }
@@ -238,6 +240,21 @@ function viewerLabel(path?: string): string {
   return kind === "comic" ? "阅读漫画" : kind === "text" ? "阅读小说" : "应用内播放";
 }
 
+async function shareTaskOutput(task: DownloadTask): Promise<void> {
+  const current = store.tasks.find((item) => item.id === task.id);
+  if (!android || !current || taskBusy(current)) return;
+  const choices = getCompletedDownloadFiles(current, configuredOutputRoots());
+  const output = choices.length === 1 ? choices[0] : choices.find((item) => item.path === outputSelections.value[current.id]);
+  if (!output) { formError.value = "先选择需要导出的已完成文件。"; return; }
+  await taskAction(current.id, () => invoke("share_downloaded_file", { path: output.path }));
+}
+
+async function shareLocalOutput(task: LocalDownloadTask): Promise<void> {
+  const path = localStore.ownedOutputPath(task.id);
+  if (!android || !path) return;
+  await taskAction(task.id, () => invoke("share_downloaded_file", { path }));
+}
+
 async function viewTaskOutput(task: DownloadTask): Promise<void> {
   const current = store.tasks.find((item) => item.id === task.id);
   if (!current || taskBusy(current) || !isTauriRuntime()) return;
@@ -386,7 +403,7 @@ function rebuildLocalRecords(): void {
     <div>
       <p class="eyebrow">所有下载，都在这里</p>
       <h2>下载中心</h2>
-      <p class="muted">查看视频 MP4、漫画 CBZ、小说 TXT，以及直链、磁力和种子的下载进度。</p>
+      <p class="muted">{{ android ? '查看漫画 CBZ、小说 TXT 和 HTTP/HTTPS 文件下载进度。' : '查看视频 MP4、漫画 CBZ、小说 TXT，以及直链、磁力和种子的下载进度。' }}</p>
     </div>
     <RouterLink class="ghost-button" to="/settings">引擎与保存位置</RouterLink>
   </section>
@@ -409,7 +426,7 @@ function rebuildLocalRecords(): void {
     <div class="card-heading">
       <div>
         <h3>添加下载任务</h3>
-        <p class="muted">粘贴 HTTP/HTTPS 文件链接、Magnet 或 .torrent 链接，应用自动选择下载引擎。</p>
+        <p class="muted">{{ android ? '粘贴 HTTP/HTTPS 文件直链，使用安卓原生前台下载。' : '粘贴 HTTP/HTTPS 文件链接、Magnet 或 .torrent 链接，应用自动选择下载引擎。' }}</p>
       </div>
     </div>
     <form class="download-form" @submit.prevent="submit">
@@ -417,14 +434,14 @@ function rebuildLocalRecords(): void {
         <span>链接</span>
         <input v-model="url" type="text" inputmode="url" placeholder="https://example.com/file.zip" required />
       </label>
-      <label>
+      <label v-if="!android">
         <span>下载目录</span>
         <input v-model="directory" type="text" placeholder="例如 D:\\ACGN\\Incoming" required />
       </label>
       <button class="primary-button" :disabled="adding" type="submit">{{ adding ? "创建中…" : "开始下载" }}</button>
     </form>
     <p v-if="formError || store.error" class="error-message">{{ formError || store.error }}</p>
-    <p class="hint">默认使用内置 aria2；qBittorrent 可在设置中选用。更换目录不会移动已有任务文件。</p>
+    <p class="hint">{{ android ? '使用安卓原生 HTTP 下载，请保持应用在前台。关闭或系统结束应用后，重新打开可继续未完成任务；暂不支持磁力与种子。' : '默认使用内置 aria2；qBittorrent 可在设置中选用。更换目录不会移动已有任务文件。' }}</p>
   </section>
 
   <section class="card">
@@ -492,7 +509,8 @@ function rebuildLocalRecords(): void {
           <template v-if="outputChoices[task.id]?.length">
             <label v-if="outputChoices[task.id].length > 1" class="completed-output-choice"><span>选择打开文件</span><select v-model="outputSelections[task.id]" :disabled="taskBusy(task)"><option value="">先选择一个文件</option><option v-for="output in outputChoices[task.id]" :key="output.path" :value="output.path">{{ output.label }}</option></select></label>
             <button v-if="outputChoices[task.id].some(output => getLocalViewerKind(output.path))" class="small-button primary-button" :disabled="!isTauriRuntime() || taskBusy(task) || !getLocalViewerKind(selectedOutput(task)?.path ?? '')" type="button" @click="viewTaskOutput(task)">{{ viewerLabel(selectedOutput(task)?.path) }}</button>
-            <button class="small-button" :disabled="!isTauriRuntime() || taskBusy(task) || !selectedOutput(task)" :title="selectedOutput(task)?.path || '先选择需要打开的文件'" type="button" @click="openTaskOutput(task)">打开文件</button>
+            <button v-if="!android" class="small-button" :disabled="!isTauriRuntime() || taskBusy(task) || !selectedOutput(task)" :title="selectedOutput(task)?.path || '先选择需要打开的文件'" type="button" @click="openTaskOutput(task)">打开文件</button>
+            <button v-else class="small-button" :disabled="taskBusy(task) || !selectedOutput(task)" type="button" @click="shareTaskOutput(task)">导出/分享</button>
           </template>
           <button v-if="task.state === 'completed' && task.engineId === 'aria2' && task.files.length" class="small-button" :disabled="taskBusy(task) || !!store.namingRecoveryMessage" type="button" @click="openNameEditor(task)">{{ task.naming?.status === 'renamed' ? '修改名称' : '自动命名' }}</button>
           <button v-if="['queued', 'downloading'].includes(task.state)" class="small-button" :disabled="pendingTaskActions.has(task.id)" type="button" @click="taskAction(task.id, () => store.pause(task))">暂停</button>
@@ -500,9 +518,9 @@ function rebuildLocalRecords(): void {
           <button v-if="['failed', 'cancelled'].includes(task.state)" class="small-button" :disabled="pendingTaskActions.has(task.id)" type="button" @click="taskAction(task.id, () => store.retry(task))">重试</button>
           <button v-if="statusUnavailable(task)" class="small-button" :disabled="pendingTaskActions.has(task.id)" type="button" @click="taskAction(task.id, () => store.refreshAll())">刷新状态</button>
           <RouterLink v-if="task.mediaId && (task.state === 'failed' || task.stage === 'connecting')" class="small-button" :to="'/media/' + encodeURIComponent(task.mediaId)">查找其它资源</RouterLink>
-          <button class="small-button" type="button" @click="openDirectory(task)">下载目录</button>
-          <button v-if="task.tempPath" class="small-button" type="button" @click="openPath(task.tempPath, '临时目录')">临时目录</button>
-          <button v-if="task.finalPath" class="small-button" type="button" @click="openPath(task.finalPath, '最终目录')">最终目录</button>
+          <button v-if="!android" class="small-button" type="button" @click="openDirectory(task)">下载目录</button>
+          <button v-if="!android && task.tempPath" class="small-button" type="button" @click="openPath(task.tempPath, '临时目录')">临时目录</button>
+          <button v-if="!android && task.finalPath" class="small-button" type="button" @click="openPath(task.finalPath, '最终目录')">最终目录</button>
           <template v-if="['completed', 'failed', 'cancelled'].includes(task.state)">
             <button class="small-button" :disabled="taskBusy(task)" type="button" @click="removeTask(task, false)">删记录</button>
             <button v-if="isTauriRuntime() && task.files.length" class="small-button danger" :disabled="taskBusy(task)" type="button" @click="removeTask(task, true)">删记录和文件</button>
@@ -538,8 +556,9 @@ function rebuildLocalRecords(): void {
           </div>
           <div class="task-actions">
             <button v-if="task.stage === 'completed' && isTauriRuntime() && getLocalViewerKind(task.outputPath)" class="small-button primary-button" :disabled="!localStore.ownedOutputPath(task.id) || pendingTaskActions.has(task.id)" type="button" @click="viewLocalOutput(task)">{{ viewerLabel(task.outputPath) }}</button>
-            <button v-if="task.stage === 'completed' && isTauriRuntime()" class="small-button" :disabled="!localStore.ownedOutputPath(task.id) || pendingTaskActions.has(task.id)" type="button" @click="openCompletedFile(task)">打开文件</button>
-            <button class="small-button" type="button" @click="openPath(task.directory, '输出目录')">输出目录</button>
+            <button v-if="!android && task.stage === 'completed' && isTauriRuntime()" class="small-button" :disabled="!localStore.ownedOutputPath(task.id) || pendingTaskActions.has(task.id)" type="button" @click="openCompletedFile(task)">打开文件</button>
+            <button v-if="android && task.stage === 'completed'" class="small-button" :disabled="!localStore.ownedOutputPath(task.id) || pendingTaskActions.has(task.id)" type="button" @click="shareLocalOutput(task)">导出/分享</button>
+            <button v-if="!android" class="small-button" type="button" @click="openPath(task.directory, '输出目录')">输出目录</button>
             <button v-if="['preparing', 'downloading', 'packaging'].includes(task.stage)" class="small-button danger" :disabled="pendingTaskActions.has(task.id)" type="button" @click="taskAction(task.id, () => localStore.cancel(task.id))">取消</button>
             <template v-else>
               <span v-if="localStore.isRunning(task.id)" class="muted">正在等待当前步骤停止…</span>

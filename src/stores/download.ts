@@ -6,7 +6,7 @@ import { DownloadManager, errorMessage } from "@/application/download-manager";
 import { createTaskRepository } from "@/infrastructure/database/create-task-repository";
 import { createDownloadEngine } from "@/infrastructure/download/create-download-engine";
 import { loadSettings } from "@/shared/settings";
-import { isTauriRuntime } from "@/shared/runtime";
+import { isAndroidRuntime, isTauriRuntime } from "@/shared/runtime";
 import { emitDownloadCompleted } from "@/application/download-events";
 import { automaticNameEligible, previewCompletedName, type CompletedNamePreview } from "@/application/completed-download-naming";
 import { createMediaLibraryRepository } from "@/infrastructure/library/create-media-library-repository";
@@ -29,7 +29,7 @@ export const useDownloadStore = defineStore("downloads", () => {
     error.value = "";
     initializing = (async () => {
       const repository = await createTaskRepository();
-      if (isTauriRuntime()) {
+      if (isTauriRuntime() && !isAndroidRuntime()) {
         const recovery = await invoke<{ recovered: number; pending: number; messages: string[] }>("recover_completed_download_renames");
         namingRecoveryMessage.value = recovery.pending ? recovery.messages.join("；") || "有成品命名操作尚待恢复，请先检查文件位置。" : "";
       }
@@ -51,7 +51,7 @@ export const useDownloadStore = defineStore("downloads", () => {
       manager = candidate;
       // Also handle completed rows from an older version, once. Active BT files
       // keep their original names until the engine confirms completion.
-      if (isTauriRuntime() && !namingRecoveryMessage.value) for (const task of [...tasks.value]) void automaticallyName(task);
+      if (isTauriRuntime() && !isAndroidRuntime() && !namingRecoveryMessage.value) for (const task of [...tasks.value]) void automaticallyName(task);
     })().catch((cause) => { error.value = errorMessage(cause); throw cause; })
       .finally(() => { loading.value = false; initializing = undefined; });
     return initializing;

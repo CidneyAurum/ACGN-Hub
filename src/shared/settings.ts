@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { isTauriRuntime } from "./runtime";
+import { isAndroidRuntime, isTauriRuntime, setRuntimePlatform } from "./runtime";
+import { joinWindowsPath } from "@/domain/organization";
 import { initializePortableProfile } from "./portable-profile";
 
 export type DownloadEngineKind = "aria2" | "qbittorrent";
@@ -18,9 +19,11 @@ export interface AppSettings {
   speedLimitBytesPerSecond: number;
   pollIntervalMs: number;
   autoRenameDownloads: boolean;
+  /** Selected from native platform capabilities, never a user-controlled RPC endpoint. */
+  httpDownloadEngine?: "aria2" | "mobile_http";
 }
 export interface QbittorrentCredentials { username: string; password: string }
-interface RuntimeDefaults { incomingDirectory: string; libraryDirectory: string; backupDirectory: string; aria2Endpoint: string }
+interface RuntimeDefaults { incomingDirectory: string; libraryDirectory: string; backupDirectory: string; aria2Endpoint: string; platform?: string; desktopEngineAvailable?: boolean }
 
 const SETTINGS_KEY = "acgn-hub.settings.v1";
 export const SETTINGS_CHANGED_EVENT = "acgn-hub:settings-changed";
@@ -60,10 +63,11 @@ export function loadSettings(): AppSettings {
   settings.qbittorrentEndpoint ||= DEFAULT_SETTINGS.qbittorrentEndpoint;
   settings.downloadEngine = saved.downloadEngine === "qbittorrent" ? "qbittorrent" : "aria2";
   settings.btDownloadEngine = saved.btDownloadEngine === "qbittorrent" ? "qbittorrent" : "aria2";
-  settings.maxConcurrentDownloads = boundedNumber(saved.maxConcurrentDownloads, 1, 20, 3);
+  settings.maxConcurrentDownloads = boundedNumber(saved.maxConcurrentDownloads, 1, isAndroidRuntime() ? 3 : 20, 3);
   settings.speedLimitBytesPerSecond = boundedNumber(saved.speedLimitBytesPerSecond, 0, 1024 ** 3, 0);
   settings.pollIntervalMs = boundedNumber(saved.pollIntervalMs, 1000, 60000, 2500);
   settings.autoRenameDownloads = typeof saved.autoRenameDownloads === "boolean" ? saved.autoRenameDownloads : true;
+  if (isAndroidRuntime()) settings.httpDownloadEngine = "mobile_http";
   return settings;
 }
 
@@ -73,12 +77,13 @@ export function initializeSettings(): Promise<AppSettings> {
     if (!isTauriRuntime()) return loadSettings();
     await initializePortableProfile();
     const defaults = await invoke<RuntimeDefaults>("get_runtime_defaults");
+    setRuntimePlatform(defaults.platform);
     const settings = loadSettings();
     settings.incomingDirectory ||= defaults.incomingDirectory;
     settings.libraryDirectory ||= defaults.libraryDirectory;
     settings.backupDirectory ||= defaults.backupDirectory;
-    settings.obsidianEbookDirectory ||= settings.libraryDirectory.replace(/[\\/]+$/, "") + "\\Books";
-    if (settings.aria2Endpoint === defaults.aria2Endpoint && !loadSessionSecret()) saveSessionSecret(crypto.randomUUID() + crypto.randomUUID());
+    settings.obsidianEbookDirectory ||= joinWindowsPath(settings.libraryDirectory, "Books");
+    if (!isAndroidRuntime() && settings.aria2Endpoint === defaults.aria2Endpoint && !loadSessionSecret()) saveSessionSecret(crypto.randomUUID() + crypto.randomUUID());
     saveSettings(settings);
     return settings;
   })().catch((cause) => { initializing = undefined; throw cause; });

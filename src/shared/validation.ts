@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { DownloadTarget } from "@/domain/download";
+import { isAndroidRuntime } from "./runtime";
 
 const downloadUrlSchema = z.string().trim().min(1).max(8192);
 
@@ -36,7 +37,9 @@ export function assertDownloadDirectory(directory: string): string {
   const normalized = directory.trim();
   if (!normalized) throw new Error("请先在设置中选择下载目录");
   if (normalized.length > 4096) throw new Error("下载目录路径过长");
-  if (!/^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+)/.test(normalized)) throw new Error("下载目录必须使用 Windows 绝对路径");
+  if (isAndroidRuntime()) {
+    if (!normalized.startsWith("/") || normalized.startsWith("//") || normalized.includes("\\")) throw new Error("请选择应用内的有效保存目录");
+  } else if (!/^(?:[A-Za-z]:[\\/]|\\\\[^\\/]+[\\/][^\\/]+)/.test(normalized)) throw new Error("下载目录必须使用 Windows 绝对路径");
   if (normalized.split(/[\\/]/).some((segment) => segment === "..")) throw new Error("下载目录不能包含 .. 父目录片段");
   if (/[\u0000-\u001f]/.test(normalized)) throw new Error("下载目录包含无效字符");
   return normalized;

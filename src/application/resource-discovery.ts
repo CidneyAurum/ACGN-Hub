@@ -4,7 +4,7 @@ import { resourceDedupeKey } from "@/domain/resource";
 import type { SourceConfig } from "@/domain/source";
 import type { SourceProvider, SourceSearchResult } from "./source-ports";
 import { createSourceProvider } from "@/infrastructure/sources/create-source-provider";
-import { sourceSupportsType } from "@/infrastructure/sources/source-catalog";
+import { sourcePlatformUnavailableReason, sourceSupportsType } from "@/infrastructure/sources/source-catalog";
 import { parsePublicVideoInput } from "@/infrastructure/sources/public-video-source-provider";
 import { rankSourceCandidates, resourceTitleLabels, sourceSearchTerms, seasonNumber } from "@/infrastructure/sources/source-matching";
 
@@ -49,7 +49,7 @@ export async function searchSourceCandidates(input: ResourceDiscoveryInput, fact
   candidates: SourceCandidate[]; failures: SourceFailure[]; searchedSources: number;
 }> {
   if (!input.keyword.trim()) throw new Error("请输入作品名、来源作品 ID 或链接");
-  const sources = input.sources.filter((config) => config.enabled && sourceSupportsType(config, input.mediaType));
+  const sources = input.sources.filter((config) => config.enabled && sourceSupportsType(config, input.mediaType) && !sourcePlatformUnavailableReason(config));
   const aliases = [...new Set([...(input.aliases ?? []), input.media?.title, input.media?.originalTitle, ...(input.media?.aliases ?? [])].filter((value): value is string => Boolean(value)))];
   const terms = sourceSearchTerms(input.keyword, aliases);
   let completed = 0;
@@ -165,6 +165,8 @@ export async function discoverResources(input: ResourceDiscoveryInput, factory: 
 export async function loadSourceItemResources(input: {
   config: SourceConfig; sourceItemId: string; title: string; mediaType?: MediaType;
 }, factory: ProviderFactory = createSourceProvider): Promise<{ provider: SourceProvider; resources: ResourceItem[]; warnings: string[] }> {
+  const unavailable = sourcePlatformUnavailableReason(input.config);
+  if (unavailable) throw new Error(unavailable);
   const provider = factory(input.config);
   let resources = await provider.listResources(input.sourceItemId);
   if (!resources.length && !["mangadex", "copymanga", "rss", "lnovel"].includes(input.config.type)) {

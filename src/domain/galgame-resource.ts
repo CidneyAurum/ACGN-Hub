@@ -1,5 +1,6 @@
 import type { ResourceItem } from "./resource";
-import { joinWindowsPath, sanitizeFileName } from "./organization";
+import { joinWindowsPath, sanitizeFileName, sanitizeMobileFileName } from "./organization";
+import { isAndroidRuntime } from "@/shared/runtime";
 
 export interface GalgameResourceFilters {
   chinese: boolean;
@@ -93,6 +94,7 @@ export function compareGalgameResources(left: ResourceItem, right: ResourceItem)
 export function galgameDownloadFileName(resource: ResourceItem, targetFilename?: string): string {
   const preferred = strings(resource.metadata.downloadFileName, targetFilename, resource.title).find((value) => value.trim());
   const original = (preferred ?? "未命名资源").trim().replace(/[. ]+$/g, "");
+  if (isAndroidRuntime()) return sanitizeMobileFileName(original, "未命名资源");
   const suffix = original.match(/(?:\.part\d+\.rar|\.(?:7z|zip)(?:\.\d{3,})?|\.tar\.(?:gz|xz|bz2)|\.[a-z\d]{1,8})$/i)?.[0] ?? "";
   const stem = suffix ? original.slice(0, -suffix.length) : original;
   return sanitizeFileName(stem, "未命名资源").slice(0, 180 - suffix.length) + suffix;

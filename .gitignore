@@ -2,6 +2,7 @@ node_modules/
 dist/
 src-tauri/target/
 .work/
+.local/
 Incoming/
 Library/
 Backups/
@@ -31,3 +32,7 @@ docs/research/assets/
 .env
 .env.*
 !.env.example
+*.jks
+*.keystore
+*.p12
+*.pfx

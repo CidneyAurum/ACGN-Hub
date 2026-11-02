@@ -1,5 +1,8 @@
-use crate::safe_fs::{absolute_path, AtomicOutput};
+use crate::safe_fs::absolute_path;
+#[cfg(windows)]
+use crate::safe_fs::AtomicOutput;
 use serde_json::Value;
+#[cfg(windows)]
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
@@ -17,6 +20,9 @@ use tauri::Manager;
 #[path = "bt_tracker_preflight.rs"]
 mod bt_tracker_preflight;
 
+// This executable is a Windows PE binary. Never embed or attempt to launch it
+// from a mobile package, even when an Android device has an aria2 installation.
+#[cfg(windows)]
 const ARIA2_BYTES: &[u8] = include_bytes!("../resources/aria2c.exe");
 pub const INTERNAL_ARIA2_ENDPOINT: &str = "http://127.0.0.1:16800/jsonrpc";
 // aria2.shutdown itself schedules the halt 3 seconds later so the RPC response
@@ -39,6 +45,11 @@ fn owned_aria2() -> &'static std::sync::Mutex<Option<OwnedAria2>> {
 
 /// A documented portable profile, covering the database, webview state and default files.
 pub fn portable_data_directory() -> Result<Option<PathBuf>, String> {
+    #[cfg(mobile)]
+    return Ok(None);
+
+    #[cfg(not(mobile))]
+    {
     let Some(value) = std::env::var_os("ACGN_HUB_DATA_DIR") else {
         let executable = std::env::current_exe().map_err(|error| format!("无法定位程序文件：{error}"))?;
         return crate::portable_profile::adjacent_profile(&executable);
@@ -47,7 +58,8 @@ pub fn portable_data_directory() -> Result<Option<PathBuf>, String> {
     if !path.is_absolute() || crate::safe_fs::has_parent_component(&path) {
         return Err("ACGN_HUB_DATA_DIR 必须是无 .. 片段的绝对路径".to_string());
     }
-    Ok(Some(path))
+        Ok(Some(path))
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -57,10 +69,18 @@ pub struct RuntimeDefaults {
     library_directory: String,
     backup_directory: String,
     aria2_endpoint: String,
+    platform: &'static str,
+    desktop_engine_available: bool,
 }
 
 #[tauri::command]
 pub fn get_runtime_defaults(app: tauri::AppHandle) -> Result<RuntimeDefaults, String> {
+    // Scoped storage does not allow arbitrary writes to /storage/emulated/0.
+    // Native downloads and the in-app reader share the private app files area.
+    #[cfg(mobile)]
+    let root = app.path().app_data_dir()
+        .map_err(|error| format!("无法定位应用私有文件目录：{error}"))?.join("files").join("Files");
+    #[cfg(not(mobile))]
     let root = if let Some(profile) = portable_data_directory()? {
         profile.join("Files")
     } else {
@@ -68,6 +88,7 @@ pub fn get_runtime_defaults(app: tauri::AppHandle) -> Result<RuntimeDefaults, St
             .or_else(|_| app.path().home_dir().map(|path| path.join("Downloads")))
             .map_err(|error| format!("无法定位用户下载目录：{error}"))?.join("ACGN")
     };
+    std::fs::create_dir_all(&root).map_err(|error| format!("创建应用文件目录失败：{error}"))?;
     let incoming = root.join("Incoming");
     *DEFAULT_INCOMING
         .get_or_init(|| std::sync::Mutex::new(None))
@@ -78,6 +99,8 @@ pub fn get_runtime_defaults(app: tauri::AppHandle) -> Result<RuntimeDefaults, St
         library_directory: root.join("Library").to_string_lossy().into_owned(),
         backup_directory: root.join("Backups").to_string_lossy().into_owned(),
         aria2_endpoint: INTERNAL_ARIA2_ENDPOINT.to_string(),
+        platform: std::env::consts::OS,
+        desktop_engine_available: cfg!(windows),
     })
 }
 
@@ -557,6 +580,9 @@ pub async fn aria2_rpc(
     mut params: Vec<Value>,
     managed: Option<bool>,
 ) -> Result<Value, String> {
+    if cfg!(mobile) {
+        return Err("安卓端不包含 aria2/BT 引擎；请使用漫画章节、小说下载或在 Windows 端处理磁力任务".into());
+    }
     local_endpoint(&endpoint, "/jsonrpc")?;
     validate_rpc_secret(secret.as_deref())?;
     validate_rpc(&method, &params)?;
@@ -599,6 +625,9 @@ pub async fn ensure_local_aria2(
     secret: Option<String>,
     directory: String,
 ) -> Result<(), String> {
+    if !cfg!(windows) {
+        return Err("内置 aria2 下载引擎仅适用于 Windows；安卓端支持漫画章节和小说下载".into());
+    }
     if SHUTTING_DOWN.load(Ordering::SeqCst) {
         return Err("应用正在退出，下载引擎不会重新启动".into());
     }
@@ -775,6 +804,7 @@ fn owned_startup_arguments(
     ]
 }
 
+#[cfg(windows)]
 fn materialize_aria2() -> Result<PathBuf, String> {
     let directory = runtime_directory()?;
     let digest = format!("{:x}", Sha256::digest(ARIA2_BYTES));
@@ -792,6 +822,11 @@ fn materialize_aria2() -> Result<PathBuf, String> {
         .map_err(|error| format!("写入 aria2 失败：{error}"))?;
     output.publish(file)?;
     Ok(path)
+}
+
+#[cfg(not(windows))]
+fn materialize_aria2() -> Result<PathBuf, String> {
+    Err("当前平台不支持 Windows 内置 aria2 引擎".into())
 }
 
 pub fn stop_owned_aria2() {

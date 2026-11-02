@@ -4,10 +4,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { loadSettings, loadSessionSecret, saveSessionSecret, saveSettings, loadSessionQbittorrentCredentials, saveSessionQbittorrentCredentials } from "@/shared/settings";
 import { probeDownloadEngine } from "@/infrastructure/download/create-download-engine";
-import { isTauriRuntime } from "@/shared/runtime";
+import { isAndroidRuntime, isTauriRuntime } from "@/shared/runtime";
 import { assertDownloadDirectory, assertLocalEndpoint } from "@/shared/validation";
+import thirdPartyNotices from "../../THIRD_PARTY_NOTICES.md?raw";
+import androidComponentLicense from "../../third_party/android/Apache-2.0.txt?raw";
 
 const settings = ref(loadSettings());
+const android = isAndroidRuntime();
+const licenseText = thirdPartyNotices + "\n\nAndroid components: Apache License 2.0\n" + androidComponentLicense;
 const secret = ref(loadSessionSecret());
 const qbitCredentials = ref(loadSessionQbittorrentCredentials());
 const speedLimitKib = ref(Math.round(settings.value.speedLimitBytesPerSecond / 1024));
@@ -46,15 +50,17 @@ function submit(): void {
     if (settings.value.incomingDirectory.replace(/[\\/]+$/, "").toLowerCase() === settings.value.libraryDirectory.replace(/[\\/]+$/, "").toLowerCase()) {
       throw new Error("待整理目录和作品库目录需要分别设置，以免重复扫描和整理。");
     }
-    validateEndpoint(settings.value.aria2Endpoint, "aria2");
-    validateEndpoint(settings.value.qbittorrentEndpoint, "qBittorrent");
-    settings.value.maxConcurrentDownloads = clampNumber(settings.value.maxConcurrentDownloads, 1, 20, 3);
+    if (!android) {
+      validateEndpoint(settings.value.aria2Endpoint, "aria2");
+      validateEndpoint(settings.value.qbittorrentEndpoint, "qBittorrent");
+    }
+    settings.value.maxConcurrentDownloads = clampNumber(settings.value.maxConcurrentDownloads, 1, android ? 3 : 20, 3);
     speedLimitKib.value = clampNumber(speedLimitKib.value, 0, 1024 * 1024, 0);
     settings.value.speedLimitBytesPerSecond = speedLimitKib.value * 1024;
     settings.value.pollIntervalMs = clampNumber(settings.value.pollIntervalMs, 1000, 60000, 2500);
-    storeSessionCredentials();
+    if (!android) storeSessionCredentials();
     saveSettings(settings.value);
-    saved.value = "设置已保存。连接是否可用请使用对应引擎的连接测试确认。";
+    saved.value = android ? "设置已保存。文件保存在应用内，可在下载页直接阅读。" : "设置已保存。连接是否可用请使用对应引擎的连接测试确认。";
   } catch (cause) { error.value = cause instanceof Error ? cause.message : "设置保存失败"; }
 }
 
@@ -112,13 +118,15 @@ function restoreSaved(): void {
 
     <section class="card">
       <div class="card-heading"><div><h3>保存位置</h3><p class="muted">这些是配置路径；选择目录和保存设置不会移动已有文件。</p></div></div>
+      <p v-if="android" class="hint">安卓文件保存在应用存储中，漫画和小说下载后可在本应用阅读。当前使用自动管理的保存位置；卸载应用会移除应用数据。</p>
       <div v-if="portableDirectory" class="portable-mode-note" role="status"><strong>便携模式</strong><p>资料保存在 {{ portableDirectory }}。关闭应用后，将完整程序文件夹连同 Data 一起移动；内部文件路径会在下次启动时更新。自定义外部目录需要另外携带。</p></div>
-      <div class="directory-settings">
+      <div v-if="!android" class="directory-settings">
         <label v-for="directory in directories" :key="directory.key"><span>{{ directory.title }}</span><div class="path-picker"><input v-model="settings[directory.key]" :required="directory.key !== 'downloadDirectory'" :placeholder="directory.key === 'downloadDirectory' ? '留空则使用待整理目录' : '填写绝对路径或选择目录'" /><button class="ghost-button" type="button" @click="chooseDirectory(directory.key)">选择目录</button></div><small class="muted">{{ directory.description }}</small></label>
       </div>
     </section>
 
-    <div class="engine-settings-grid">
+    <section v-if="android" class="card"><h3>原生 HTTP 下载</h3><p class="muted">支持 HTTP/HTTPS 文件，以及漫画 CBZ、轻小说 TXT 下载与内读。请在下载期间保持应用在前台；重新打开后可恢复已暂停的直链任务。</p><p class="hint">限速设置用于新建的 HTTP 任务，已有任务保留创建时的限速。磁力、Torrent、公开投稿的 Python 下载、JMComic 本地桥接和 Windows 游戏运行属于桌面端功能。安卓可检索游戏版本和下载归档，运行 Windows 游戏需使用电脑。</p></section>
+    <div v-else class="engine-settings-grid">
       <section class="card engine-card">
         <div class="card-heading"><div><span class="tag-pill">HTTP / HTTPS / BitTorrent</span><h3>内置下载 · aria2</h3><p class="muted">直链、磁力和种子均可使用随应用提供的引擎，无需另装下载软件。</p></div></div>
         <label>JSON-RPC 地址<input v-model="settings.aria2Endpoint" type="url" required /></label>
@@ -138,16 +146,18 @@ function restoreSaved(): void {
     </div>
 
     <section class="card">
-      <div class="card-heading"><div><h3>下载调度</h3><p class="muted">内置 aria2 的并发数量和单任务限速会在任务状态刷新时同步。每个任务各自限速，0 为不限速；qBittorrent 已有任务的限速请在其客户端调整。提高并发不会增加资源的在线节点。</p></div></div>
-      <div class="scheduling-settings"><label>最大并发任务数<input v-model.number="settings.maxConcurrentDownloads" type="number" min="1" max="20" required /></label><label>单任务限速（KiB/s，0 为不限速）<input v-model.number="speedLimitKib" type="number" min="0" max="1048576" required /></label><label>状态刷新间隔（毫秒）<input v-model.number="settings.pollIntervalMs" type="number" min="1000" max="60000" required /></label></div>
-      <label class="auto-rename-option"><input v-model="settings.autoRenameDownloads" type="checkbox" /><span>下载完成后自动命名</span></label>
-      <p class="hint">aria2 单文件完成后，按关联作品、可靠集数和原扩展名在当前目录改名；重名不覆盖。多文件请在下载中心逐项预览；qBittorrent 请在其客户端改名以保留做种。</p>
+      <div class="card-heading"><div><h3>下载调度</h3><p class="muted">{{ android ? '最多同时下载 3 个直链文件，限速用于新建任务，0 为不限速。请保持应用在前台；系统结束应用后可重新打开并继续。' : '内置 aria2 的并发数量和单任务限速会在任务状态刷新时同步。每个任务各自限速，0 为不限速；qBittorrent 已有任务的限速请在其客户端调整。提高并发不会增加资源的在线节点。' }}</p></div></div>
+      <div class="scheduling-settings"><label>最大并发任务数<input v-model.number="settings.maxConcurrentDownloads" type="number" min="1" :max="android ? 3 : 20" required /></label><label>单任务限速（KiB/s，0 为不限速）<input v-model.number="speedLimitKib" type="number" min="0" max="1048576" required /></label><label>状态刷新间隔（毫秒）<input v-model.number="settings.pollIntervalMs" type="number" min="1000" max="60000" required /></label></div>
+      <label v-if="!android" class="auto-rename-option"><input v-model="settings.autoRenameDownloads" type="checkbox" /><span>下载完成后自动命名</span></label>
+      <p v-if="!android" class="hint">aria2 单文件完成后，按关联作品、可靠集数和原扩展名在当前目录改名；重名不覆盖。多文件请在下载中心逐项预览；qBittorrent 请在其客户端改名以保留做种。</p>
     </section>
+    <details class="card legal-notices"><summary>关于与第三方组件声明</summary><pre>{{ licenseText }}</pre></details>
     <div class="settings-savebar"><div><p v-if="error" class="error-message" role="alert">{{ error }}</p><p v-if="saved" class="success-message" role="status">{{ saved }}</p></div><div class="task-actions"><button class="ghost-button" type="button" @click="restoreSaved">恢复已保存</button><button class="primary-button" type="submit">保存设置</button></div></div>
   </form>
 </template>
 
 <style scoped>
+.legal-notices{min-width:0}.legal-notices summary{cursor:pointer;color:#846596;font-size:13px}.legal-notices pre{max-height:320px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7;font-size:11px;color:#867490;user-select:text}
 .portable-mode-note{border:1px solid #e8deee;background:#faf6fd;border-radius:10px;padding:14px 16px;margin-bottom:20px;color:#846596;font-size:12px;overflow-wrap:anywhere}.portable-mode-note p{margin:6px 0 0;line-height:1.8;color:#9882a6}
 .auto-rename-option{display:flex;align-items:center;gap:8px;margin-top:20px;font-size:12px}.auto-rename-option input{width:auto;accent-color:#a282bc}
 </style>

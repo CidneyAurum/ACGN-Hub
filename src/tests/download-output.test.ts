@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DownloadTask } from "@/domain/download";
-import { getCompletedDownloadOutputs } from "@/domain/download-output";
+import { getCompletedDownloadFiles, getCompletedDownloadOutputs } from "@/domain/download-output";
 
 function task(overrides: Partial<DownloadTask> = {}): DownloadTask {
   return { id: "completed", engineId: "aria2", directory: "D:\\Incoming", sourceUrl: "https://fixture.example/episode.torrent", protocol: "torrent", state: "completed", files: ["D:\\Incoming\\作品 - 第01话.mkv"], totalBytes: 100, completedBytes: 100, speedBytesPerSecond: 0, dedupeKey: "completed", createdAt: "2026-10-31T00:00:00Z", updatedAt: "2026-10-31T00:00:00Z", ...overrides };
@@ -43,5 +43,15 @@ describe("completed download output choices", () => {
   it("retains absolute POSIX and UNC paths with real child boundaries", () => {
     expect(getCompletedDownloadOutputs(task({ directory: "/home/me/Incoming", files: ["/home/me/Incoming/series/a.mkv", "/home/me/Incoming-other/a.mkv"] }))).toHaveLength(1);
     expect(getCompletedDownloadOutputs(task({ directory: "\\\\server\\share\\Incoming", files: ["\\\\SERVER\\share\\incoming\\a.epub", "\\\\server\\share\\Incoming2\\a.epub"] }))).toHaveLength(1);
+  });
+
+  it("offers completed archives for export while rejecting control files and partial output", () => {
+    const directory = "/data/user/0/local.acgnhub.mobile/files/Files";
+    const files = [directory + "/Games/game.zip", directory + "/Books/小说.txt", directory + "/.http-tasks/task.json", directory + "/Incoming/a.zip.part", directory + "/Incoming/a.tmp", directory + "/../secret.zip", directory.toLowerCase() + "/Games/game.zip"];
+    const completed = task({ directory, files });
+    expect(getCompletedDownloadFiles(completed).map((item) => item.path)).toEqual(files.slice(0, 2));
+    expect(getCompletedDownloadOutputs(completed).map((item) => item.path)).toEqual([files[1]]);
+    expect(getCompletedDownloadFiles(task({ directory, files, state: "downloading" }))).toEqual([]);
+    expect(getCompletedDownloadFiles(task({ directory, files, finalPath: "/other/game.zip" }))).toEqual([]);
   });
 });

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DownloadManager } from "@/application/download-manager";
 import type { DownloadEngine, TaskRepository } from "@/application/ports";
 import type { DownloadStatus, DownloadTask } from "@/domain/download";
+import { getCompletedDownloadFiles, getCompletedDownloadOutputs } from "@/domain/download-output";
 
 function task(overrides: Partial<DownloadTask> = {}): DownloadTask {
   return { id: "one", engineId: "aria2", sourceUrl: "https://example.org/one.zip", protocol: "http", directory: "C:\\Downloads", state: "queued", totalBytes: 0, completedBytes: 0, speedBytesPerSecond: 0, files: [], dedupeKey: "one", createdAt: "2026-10-01", updatedAt: "2026-10-01", ...overrides };
@@ -27,6 +28,18 @@ function fixture(initial: DownloadTask[] = [], slots = 1) {
 
 describe("download task lifecycle", () => {
   afterEach(() => vi.unstubAllGlobals());
+  it("persists the native canonical directory so Android completed files remain readable and exportable", async () => {
+    const declared = "/data/user/0/local.acgnhub.mobile/files/Files/Incoming";
+    const canonical = "/data/data/local.acgnhub.mobile/files/Files/Incoming";
+    const file = canonical + "/第一卷.txt";
+    const f = fixture([task({ directory: declared, state: "downloading", engineTaskId: "active" })]);
+    vi.mocked(f.engine.status).mockResolvedValue({ state: "completed", directory: canonical, totalBytes: 10, completedBytes: 10, speedBytesPerSecond: 0, files: [file] });
+    await f.manager.refreshAll();
+    expect(f.tasks()[0].directory).toBe(canonical);
+    expect((await f.repository.findById("one"))?.directory).toBe(canonical);
+    expect(getCompletedDownloadOutputs(f.tasks()[0])).toEqual([{ path: file, allowedRoot: canonical, label: "第一卷.txt" }]);
+    expect(getCompletedDownloadFiles(f.tasks()[0])).toHaveLength(1);
+  });
   it("pauses and cancels queued tasks without requiring a remote task id", async () => {
     const f = fixture([task()]);
     await f.manager.pause("one");

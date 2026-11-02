@@ -4,6 +4,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { useDownloadStore } from "@/stores/download";
 import { useLocalDownloadStore } from "@/stores/local-download";
 import { loadSettings, SETTINGS_CHANGED_EVENT } from "@/shared/settings";
+import { isAndroidRuntime } from "@/shared/runtime";
 import { buildViewerSeries, type ViewerSeriesItem } from "@/domain/viewer-series";
 import { canAutoContinueReading, parseNovelText } from "@/domain/novel-reader";
 import {
@@ -16,6 +17,7 @@ import {
 } from "@/infrastructure/media/local-viewer-service";
 
 const route = useRoute();
+const android = isAndroidRuntime();
 const router = useRouter();
 const downloadStore = useDownloadStore();
 const localStore = useLocalDownloadStore();
@@ -54,6 +56,7 @@ const readingInteracted = ref(false);
 const chapterChanging = ref(false);
 const videoError = ref("");
 const fullScreen = ref(false);
+const immersive = ref(false);
 const settingsRevision = ref(0);
 const viewerReady = ref(false);
 let generation = 0;
@@ -70,6 +73,7 @@ let autoCheckTimer: ReturnType<typeof setTimeout> | undefined;
 let suppressReadingScrollUntil = 0;
 let userReadingInputUntil = 0;
 const flowElements = new Map<number, HTMLElement>();
+let swipeStart: { x: number; y: number; time: number } | undefined;
 
 const kindLabel = computed(() => session.value?.kind === "comic" ? "漫画阅读" : session.value?.kind === "text" ? "轻小说阅读" : "本地视频");
 const pageCount = computed(() => session.value?.pageCount ?? 0);
@@ -482,7 +486,28 @@ function jumpPage(): void {
 
 function retryPage(): void { pageError.value = false; pageLoaded.value = false; pageAttempt.value++; }
 
+function startSwipe(event: TouchEvent): void {
+  swipeStart = undefined;
+  if (session.value?.kind !== "comic" || comicMode.value !== "single" || !pageLoaded.value || event.touches.length !== 1
+    || (event.target instanceof Element && event.target.closest("button,input,select,a"))) return;
+  swipeStart = { x: event.touches[0].clientX, y: event.touches[0].clientY, time: Date.now() };
+}
+
+function trackSwipe(event: TouchEvent): void { if (event.touches.length !== 1) swipeStart = undefined; }
+
+function finishSwipe(event: TouchEvent): void {
+  const start = swipeStart; swipeStart = undefined;
+  if (!start || event.touches.length || event.changedTouches.length !== 1 || session.value?.kind !== "comic"
+    || comicMode.value !== "single" || !pageLoaded.value || Date.now() - start.time > 700) return;
+  const deltaX = event.changedTouches[0].clientX - start.x;
+  const deltaY = event.changedTouches[0].clientY - start.y;
+  // Vertical reading and pinch zoom must never accidentally turn the page.
+  if (Math.abs(deltaX) < 56 || Math.abs(deltaX) < Math.abs(deltaY) * 1.5) return;
+  if (deltaX < 0) nextComicPage(); else changePage(page.value - 1);
+}
+
 function handleKey(event: KeyboardEvent): void {
+  if (event.key === "Escape" && immersive.value) { event.preventDefault(); immersive.value = false; fullScreen.value = false; return; }
   const element = event.target instanceof Element ? event.target : undefined;
   if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
     || element?.closest("input,textarea,select,button,a,[contenteditable='true'],video") || session.value?.kind !== "comic") return;
@@ -536,14 +561,29 @@ async function openSystem(): Promise<void> {
 
 async function toggleFullScreen(): Promise<void> {
   actionError.value = "";
-  try {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else if (surface.value) { await surface.value.requestFullscreen(); stage.value?.focus({ preventScroll: true }); }
-    if (comicMode.value === "continuous") await scrollFlowTo(page.value);
-  } catch { actionError.value = "当前窗口无法进入全屏，可以尝试最大化窗口。"; }
+  if (immersive.value) { immersive.value = false; fullScreen.value = false; }
+  else if (document.fullscreenElement) {
+    try { await document.exitFullscreen(); } catch { actionError.value = "暂时无法退出全屏，请使用系统返回键。"; }
+    fullscreenChanged();
+  } else if (surface.value) {
+    // Some Android WebViews do not implement the Fullscreen API. The in-app
+    // immersive surface keeps all reader controls available in that case.
+    try {
+      if (!surface.value.requestFullscreen) throw new Error("Fullscreen API unavailable");
+      await surface.value.requestFullscreen();
+    } catch { immersive.value = true; fullScreen.value = true; }
+    fullscreenChanged();
+    await nextTick(); stage.value?.focus({ preventScroll: true });
+  }
+  if (comicMode.value === "continuous") await scrollFlowTo(page.value);
 }
 
-function fullscreenChanged(): void { fullScreen.value = document.fullscreenElement === surface.value; if (comicMode.value === "continuous") void scrollFlowTo(page.value); }
+function fullscreenChanged(): void {
+  // A missing Fullscreen API and an absent template ref are both undefined in
+  // some WebViews. Their equality must never be mistaken for an active reader.
+  fullScreen.value = immersive.value || Boolean(surface.value && document.fullscreenElement === surface.value);
+  if (comicMode.value === "continuous") void scrollFlowTo(page.value);
+}
 function settingsChanged(): void { settingsRevision.value++; }
 function visibilityChanged(): void { if (document.visibilityState === "hidden") { savePosition(); cancelAutoContinue(); } }
 function pageLeaving(): void { stopViewer(); }
@@ -552,6 +592,7 @@ function pageReturned(event: PageTransitionEvent): void {
 }
 
 function stopViewer(): void {
+  swipeStart = undefined; immersive.value = false; fullScreen.value = false;
   generation++; savePosition(); resetStage(); releaseSession();
   if (surface.value && document.fullscreenElement === surface.value) void document.exitFullscreen().catch(() => undefined);
 }
@@ -560,6 +601,7 @@ watch([() => route.fullPath, taskFingerprint, settingsRevision, viewerReady], ()
   if (viewerReady.value && !disposed) void loadViewer();
 }, { flush: "post" });
 watch(fontSize, saveNovelPreferences);
+watch(fullScreen, (active) => { document.body.classList.toggle("viewer-immersive", active); });
 
 onMounted(async () => {
   window.addEventListener("keydown", handleKey);
@@ -597,6 +639,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("pageshow", pageReturned);
   document.removeEventListener("visibilitychange", visibilityChanged);
   document.removeEventListener("fullscreenchange", fullscreenChanged);
+  document.body.classList.remove("viewer-immersive");
 });
 </script>
 
@@ -604,13 +647,17 @@ onBeforeUnmount(() => {
   <section class="local-viewer">
     <header class="viewer-heading">
       <div><p>YOUR LOCAL STORIES</p><h1>{{ session?.title || target?.title || '打开本地作品' }}</h1><span>{{ session ? kindLabel : '从已完成的下载，继续故事' }}</span></div>
-      <div class="viewer-heading-actions"><RouterLink to="/downloads">← 返回下载</RouterLink><button type="button" :disabled="!target || openingSystem || loading" @click="openSystem">{{ openingSystem ? '正在打开…' : '系统程序打开 ↗' }}</button></div>
+      <div class="viewer-heading-actions"><RouterLink to="/downloads">← 返回下载</RouterLink><button v-if="!android" type="button" :disabled="!target || openingSystem || loading" @click="openSystem">{{ openingSystem ? '正在打开…' : '系统程序打开 ↗' }}</button></div>
     </header>
     <p v-if="actionError" class="viewer-notice error" role="alert">{{ actionError }}</p>
     <p v-if="storageWarning" class="viewer-notice">阅读位置暂时无法保存，当前观看不受影响。</p>
-    <div v-if="loading" class="viewer-loading" role="status"><span></span><p>正在打开你的本地文件…</p></div>
-    <div v-else-if="error" class="viewer-failure" role="alert"><span>◇</span><h2>暂时无法打开</h2><p>{{ error }}</p><div><button type="button" @click="loadViewer">重新尝试</button><RouterLink to="/downloads">回到下载中心</RouterLink></div></div>
-    <div v-else-if="session" ref="surface" class="viewer-surface" aria-label="本地阅读器" :class="[theme, 'surface-' + session.kind, 'paper-' + paper]" @wheel.passive="readingInput" @touchmove.passive="readingInput" @pointerdown="readingInput" @keydown="readingInput">
+    <!-- Keep the fullscreen element mounted while loading another chapter.
+         Removing it exits native fullscreen and loses automatic continuation. -->
+    <div v-show="loading || error || session" ref="surface" class="viewer-surface" aria-label="本地阅读器" :aria-busy="loading" :class="[theme, 'surface-' + (session?.kind ?? 'loading'), 'paper-' + paper, { 'is-immersive': immersive }]" @wheel.passive="readingInput" @touchmove.passive="readingInput" @pointerdown="readingInput" @keydown="readingInput">
+      <div v-if="(loading || error) && fullScreen" class="viewer-state-actions"><button type="button" @click="toggleFullScreen">退出全屏</button></div>
+      <div v-if="loading" class="viewer-loading" role="status"><span></span><p>正在打开你的本地文件…</p></div>
+      <div v-else-if="error" class="viewer-failure" role="alert"><span>◇</span><h2>暂时无法打开</h2><p>{{ error }}</p><div><button type="button" @click="loadViewer">重新尝试</button><RouterLink to="/downloads">回到下载中心</RouterLink></div></div>
+      <template v-else-if="session">
       <div class="viewer-toolbar" aria-label="观看设置">
         <div class="viewer-toolbar-group"><span>{{ kindLabel }}</span><template v-if="session.kind === 'comic'"><button type="button" :class="{ active: comicMode === 'continuous' }" :aria-pressed="comicMode === 'continuous'" @click="changeComicMode('continuous')">连续滚动</button><button type="button" :class="{ active: comicMode === 'single' }" :aria-pressed="comicMode === 'single'" @click="changeComicMode('single')">单页翻页</button><template v-if="comicMode === 'single'"><button type="button" :class="{ active: fit === 'width' }" :aria-pressed="fit === 'width'" @click="fit = 'width'">适合宽度</button><button type="button" :class="{ active: fit === 'height' }" :aria-pressed="fit === 'height'" @click="fit = 'height'">适合高度</button></template></template><template v-else-if="session.kind === 'text'"><button type="button" :disabled="fontSize <= 14" aria-label="缩小字号" @click="fontSize = Math.max(14, fontSize - 1)">A−</button><span class="viewer-font-size">{{ fontSize }}</span><button type="button" :disabled="fontSize >= 30" aria-label="放大字号" @click="fontSize = Math.min(30, fontSize + 1)">A＋</button></template></div>
         <div class="viewer-toolbar-group"><button v-if="session.kind !== 'text'" type="button" :aria-pressed="theme === 'light'" @click="theme = theme === 'dark' ? 'light' : 'dark'">{{ theme === 'dark' ? '浅色舞台' : '深色舞台' }}</button><details v-else class="novel-settings"><summary>阅读设置</summary><div><label>行距<select v-model.number="lineHeight" aria-label="小说行距" @change="saveNovelPreferences"><option :value="1.6">紧凑</option><option :value="2">舒适</option><option :value="2.4">宽松</option></select></label><label>纸色<select v-model="paper" aria-label="小说纸色" @change="saveNovelPreferences"><option value="cream">米白</option><option value="sage">护眼</option><option value="night">夜间</option></select></label><label>阅读宽度<select v-model="readingWidth" aria-label="小说阅读宽度" @change="saveNovelPreferences"><option value="comfortable">舒适</option><option value="wide">宽幅</option></select></label></div></details><button type="button" @click="toggleFullScreen">{{ fullScreen ? '退出全屏' : '全屏观看' }}</button></div>
@@ -620,7 +667,7 @@ onBeforeUnmount(() => {
         <button type="button" :disabled="!series.previous || chapterChanging" @click="navigateUnit(series.previous)">上一话 / 卷</button><button type="button" :disabled="!series.next || chapterChanging" @click="navigateUnit(series.next)">下一话 / 卷</button><button type="button" :aria-pressed="autoContinue" @click="toggleAutoContinue">自动接续{{ autoContinue ? '已开启' : '已关闭' }}</button>
       </nav>
       <div v-if="session.kind === 'text'" class="novel-contents"><label for="novel-contents">本卷目录</label><select id="novel-contents" v-model="novelChapter" aria-label="小说章节目录" :disabled="!novel.chapters.length" @change="jumpNovelChapter"><option v-if="!novel.chapters.length" value="">正文（未识别到章节标题）</option><option v-for="chapter in novel.chapters" :key="chapter.id" :value="chapter.id">{{ chapter.title }}</option></select><span>{{ novel.chapters.length ? novel.chapters.length + ' 个章节' : '全文阅读' }}</span></div>
-      <div ref="stage" class="viewer-stage" :class="[theme, 'kind-' + session.kind, 'fit-' + fit, 'paper-' + paper, { 'comic-continuous': session.kind === 'comic' && comicMode === 'continuous' }]" :aria-label="kindLabel + '区域'" tabindex="0" @scroll.passive="flowScrolled">
+      <div ref="stage" class="viewer-stage" :class="[theme, 'kind-' + session.kind, 'fit-' + fit, 'paper-' + paper, { 'comic-continuous': session.kind === 'comic' && comicMode === 'continuous', 'comic-single': session.kind === 'comic' && comicMode === 'single' }]" :aria-label="kindLabel + '区域'" tabindex="0" @scroll.passive="flowScrolled" @touchstart.passive="startSwipe" @touchmove.passive="trackSwipe" @touchend.passive="finishSwipe" @touchcancel.passive="swipeStart = undefined">
         <template v-if="session.kind === 'comic' && comicMode === 'single'">
           <div v-if="!pageLoaded && !pageError" class="viewer-page-status" role="status">正在读取第 {{ page + 1 }} 页…</div>
           <div v-if="pageError" class="viewer-page-status" role="alert"><p>第 {{ page + 1 }} 页读取失败。文件可能已移动或改变。</p><button type="button" @click="retryPage">重试这一页</button><button type="button" @click="loadViewer">重新打开文件</button></div>
@@ -650,7 +697,8 @@ onBeforeUnmount(() => {
       </footer>
       <div v-if="autoCountdown" class="viewer-auto-next" role="status"><span>{{ autoCountdown }} 秒后继续：{{ series.next?.unitTitle || series.next?.title }}</span><button type="button" @click="cancelAutoContinue(true)">取消本次接续</button><button type="button" @click="navigateUnit(series.next)">立即继续</button></div>
       <p v-else-if="!series.next" class="viewer-series-end">已到最后一话 / 卷已下载内容</p>
-      <p class="viewer-footnote">{{ session.kind === 'comic' ? comicMode === 'continuous' ? '向下滚动连续阅读 · 页码可直接跳转 · 自动记住已读位置' : '← → 翻页 · Home / End 首尾页 · 自动记住已读页码' : session.kind === 'video' ? '使用视频控件播放、调节音量或全屏 · 自动记住播放位置' : '滚动阅读 · 自动记住阅读位置' }}</p>
+      <p class="viewer-footnote">{{ session.kind === 'comic' ? comicMode === 'continuous' ? '向下滚动连续阅读 · 页码可直接跳转 · 自动记住已读位置' : '左右滑动或 ← → 翻页 · Home / End 首尾页 · 自动记住已读页码' : session.kind === 'video' ? '使用视频控件播放、调节音量或全屏 · 自动记住播放位置' : '滚动阅读 · 自动记住阅读位置' }}</p>
+      </template>
     </div>
   </section>
 </template>
@@ -659,4 +707,13 @@ onBeforeUnmount(() => {
 .local-viewer{max-width:1250px;margin:0 auto}.viewer-heading{display:flex;align-items:center;justify-content:space-between;gap:25px;margin:0 0 24px}.viewer-heading p{font-size:10px;letter-spacing:1.8px;color:#a28bb4;margin:0 0 10px}.viewer-heading h1{font-size:23px;color:#51405f;line-height:1.5;margin:0 0 8px;overflow-wrap:anywhere;max-width:760px}.viewer-heading>div>span{font-size:12px;color:#a18bad}.viewer-heading-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0}.viewer-heading-actions a{font-size:12px;color:#9272a5;text-decoration:none;white-space:nowrap}.local-viewer button{font:inherit;font-size:12px;cursor:pointer;border:1px solid #e3d8ec;background:#fff;color:#8b6e9f;padding:9px 12px;border-radius:7px;white-space:nowrap}.local-viewer button:hover:not(:disabled){border-color:#bba4cf;background:#f8f2fc}.local-viewer button:disabled{opacity:.4;cursor:default}.local-viewer button:focus-visible,.local-viewer a:focus-visible,.viewer-stage:focus-visible{outline:2px solid #a88cc6;outline-offset:3px}.viewer-notice{color:#a08364;font-size:12px;line-height:1.8;padding:11px 14px;border:1px solid #ecddc8;border-radius:8px;background:#fffaef}.viewer-notice.error{color:#af6a83;border-color:#ecd9e2;background:#fff5f8}.viewer-loading,.viewer-failure{min-height:400px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#a087b1;gap:15px;font-size:13px}.viewer-loading>span{width:27px;height:27px;border:2px solid #e6dcf0;border-top-color:#a78ac3;border-radius:50%;animation:viewer-spin 1s linear infinite}.viewer-failure>span{font-size:35px;color:#bda5d0}.viewer-failure h2{font-size:19px;margin:0;color:#806192}.viewer-failure p{max-width:600px;line-height:1.8;margin:0}.viewer-failure>div{display:flex;gap:20px;align-items:center;margin-top:10px}.viewer-failure a{font-size:12px;text-decoration:none;color:#a185b0}.viewer-toolbar{display:flex;justify-content:space-between;gap:16px;padding:12px 15px;background:#fff;border:1px solid #e9e0ef;border-bottom:0;border-radius:12px 12px 0 0}.viewer-toolbar-group{display:flex;align-items:center;gap:8px}.viewer-toolbar-group>span{font-size:11px;color:#ab96b7;margin-right:9px;white-space:nowrap}.viewer-toolbar-group>.viewer-font-size{margin:0;font-variant-numeric:tabular-nums}.viewer-toolbar button{padding:7px 10px;font-size:11px;border-color:transparent;background:#faf7fc}.viewer-toolbar button.active{color:#7c5997;border-color:#d9c7e8;background:#f1e9f8}.viewer-stage{position:relative;min-height:430px;height:calc(100vh - 340px);max-height:1100px;overflow:auto;border:1px solid #e5dbed;border-radius:0 0 12px 12px;outline:0;background:#24202b;color:#d5c9df;overscroll-behavior:contain;scrollbar-color:#63556f #24202b}.viewer-stage.light{background:#e9e4ed;color:#6c5b78;scrollbar-color:#baafc2 #e9e4ed}.viewer-stage.kind-comic{display:flex;align-items:flex-start;justify-content:center;isolation:isolate}.viewer-comic-page{display:block;flex-shrink:0;object-fit:contain;margin:0 auto}.viewer-comic-page.pending{opacity:0}.fit-height .viewer-comic-page{height:100%;width:auto;max-width:100%;object-fit:contain}.fit-width .viewer-comic-page{width:100%;height:auto}.viewer-page-status{position:absolute;inset:0;display:flex;gap:13px;align-items:center;justify-content:center;flex-wrap:wrap;align-content:center;font-size:13px;padding:25px;text-align:center;z-index:1}.viewer-page-status p{width:100%;line-height:1.8;margin:0 0 5px}.viewer-page-status button,.viewer-video-error button{background:#39303f;color:#e0cfe9;border-color:#675270}.viewer-stage.light .viewer-page-status button{background:#fff;color:#8b6e9f;border-color:#d5c2e1}.viewer-stage.kind-video{display:flex;flex-direction:column;align-items:center;justify-content:center;background:#151218;min-height:400px}.viewer-stage video{display:block;width:100%;height:100%;max-height:100%;min-height:0;background:#000;object-fit:contain;flex:1}.viewer-video-error{padding:20px 30px;text-align:center;font-size:12px;line-height:1.8;color:#e0cfe9;max-width:760px}.viewer-video-error p{margin:0 0 13px}.viewer-video-error button+button{margin-left:10px}.viewer-stage.kind-text{overflow:hidden}.viewer-text-scroll{height:100%;overflow:auto;box-sizing:border-box;overscroll-behavior:contain;outline:0;padding:32px clamp(22px,6vw,90px);line-height:2;font-family:"Microsoft YaHei","Noto Sans SC",sans-serif;scrollbar-color:inherit}.viewer-text-scroll pre{font:inherit;white-space:pre-wrap;overflow-wrap:anywhere;margin:0 auto;max-width:880px}.viewer-pagination{display:flex;align-items:center;justify-content:center;gap:25px;margin-top:19px}.viewer-pagination form{display:flex;align-items:center;gap:9px;font-size:12px;color:#9b86aa}.viewer-pagination label{font-size:11px}.viewer-pagination input{width:65px;box-sizing:border-box;padding:8px 4px;text-align:center;border:1px solid #e2d6eb;border-radius:7px;color:#806094;font:inherit;background:#fff}.viewer-pagination button{font-size:11px}.viewer-footnote{font-size:10px;line-height:1.8;text-align:center;color:#b4a2c1;margin:15px 0 0}.viewer-stage:fullscreen{height:100vh;min-height:100vh;max-height:100vh;width:100vw;border:0;border-radius:0}.viewer-stage:fullscreen.fit-height .viewer-comic-page{height:100vh}.viewer-stage:fullscreen .viewer-text-scroll{padding-top:40px;padding-bottom:50px}@keyframes viewer-spin{to{transform:rotate(360deg)}}@media(max-width:1000px){.viewer-heading{align-items:flex-start;flex-direction:column;gap:17px}.viewer-heading-actions{justify-content:flex-start}.viewer-stage{height:calc(100vh - 375px);min-height:380px}.viewer-toolbar-group>span:first-child{display:none}.viewer-heading h1{font-size:21px}}@media(max-width:700px){.viewer-heading h1{font-size:19px}.viewer-toolbar{flex-wrap:wrap;padding:10px;gap:8px}.viewer-toolbar-group{gap:4px}.viewer-toolbar button{font-size:10px;padding:7px 8px}.viewer-pagination{gap:9px;justify-content:space-between;flex-wrap:wrap}.viewer-pagination button{padding:8px;font-size:10px}.viewer-pagination form{gap:5px}.viewer-pagination label{display:none}.viewer-pagination input{width:45px}.viewer-stage{min-height:360px;height:calc(100vh - 390px)}.viewer-text-scroll{padding:23px 19px}.viewer-heading-actions button,.viewer-heading-actions a{font-size:11px}.viewer-footnote{font-size:9px}}
 .viewer-surface{border-radius:12px;background:#fff;overflow:hidden}.viewer-surface .viewer-toolbar{flex-shrink:0}.viewer-toolbar-group{flex-wrap:wrap}.viewer-surface .viewer-pagination{flex-shrink:0;margin:0;padding:14px;background:#fff;border:1px solid #e9e0ef;border-top:0}.viewer-surface .viewer-footnote{margin:0;padding:10px;background:#fff}.viewer-surface:fullscreen{width:100vw;height:100vh;display:flex;flex-direction:column;border-radius:0;background:#24202b}.viewer-surface:fullscreen .viewer-toolbar{border-radius:0}.viewer-surface:fullscreen .viewer-stage{flex:1;height:auto;min-height:0;max-height:none;width:auto;border:0;border-radius:0}.viewer-surface:fullscreen .viewer-footnote{display:none}.viewer-surface:fullscreen .viewer-pagination{padding:12px 24px}.viewer-stage.comic-continuous{display:block;padding:12px 18px;box-sizing:border-box;overflow-anchor:none}.viewer-page-flow{width:100%;display:flex;flex-direction:column;gap:14px;align-items:center}.viewer-flow-page{position:relative;width:100%;flex-shrink:0;background:#1b1720;overflow:hidden;box-shadow:0 3px 12px #0002}.light .viewer-flow-page{background:#dcd5e2}.viewer-flow-page img{display:block;width:100%;height:100%;object-fit:contain}.viewer-flow-message{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#b5a1c2;font-size:12px;padding:18px;text-align:center;pointer-events:none}.viewer-flow-message button{pointer-events:auto}.viewer-flow-message p{margin:0}.viewer-float-page{position:fixed;top:50%;transform:translateY(-50%);z-index:3!important;border-color:#ffffff35!important;background:#493853b8!important;color:#fff!important;width:48px;height:70px;padding:0!important;font-size:40px!important;border-radius:12px!important;box-shadow:0 2px 12px #0003}.viewer-float-page.previous{left:15px}.viewer-float-page.next{right:15px}.viewer-float-page:hover:not(:disabled){background:#74558be0!important}.viewer-surface:fullscreen .viewer-text-scroll{padding-top:35px;padding-bottom:40px}@media(max-width:700px){.viewer-surface .viewer-pagination{padding:10px 8px}.viewer-stage.comic-continuous{padding:8px}.viewer-page-flow{gap:9px}.viewer-float-page{width:37px;height:58px}.viewer-float-page.previous{left:7px}.viewer-float-page.next{right:7px}.viewer-toolbar-group{gap:4px}}
 .viewer-series-toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid #e9e0ef;border-top:0;background:#fcf9fe;flex-wrap:wrap}.viewer-series-toolbar strong{font-size:11px;color:#806590;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:auto}.viewer-series-toolbar select,.novel-contents select,.novel-settings select{border:1px solid #e1d5ea;border-radius:6px;background:#fff;color:#806590;font:inherit;font-size:11px;padding:7px 9px;max-width:280px}.viewer-series-toolbar button{font-size:10px;padding:7px 9px}.novel-contents{display:flex;align-items:center;gap:10px;padding:9px 14px;background:#fffdf8;border:1px solid #eee4da;border-top:0;color:#9a866f;font-size:11px}.novel-contents select{max-width:430px;flex:1}.novel-contents span{white-space:nowrap;color:#b19d88}.novel-settings{position:relative;font-size:11px;color:#8b6e9f}.novel-settings summary{cursor:pointer;list-style:none;border:1px solid #e3d8ec;background:#faf7fc;padding:7px 10px;border-radius:7px}.novel-settings summary::-webkit-details-marker{display:none}.novel-settings>div{position:absolute;right:0;top:calc(100% + 6px);z-index:5;background:#fff;border:1px solid #e3d8ec;border-radius:8px;padding:10px;box-shadow:0 8px 20px #37214a20;display:grid;gap:7px;min-width:230px}.novel-settings label{display:flex;align-items:center;justify-content:space-between;gap:10px}.viewer-stage.kind-text.paper-cream{background:#fbf5e9;color:#5f5147}.viewer-stage.kind-text.paper-sage{background:#edf3e8;color:#506252}.viewer-stage.kind-text.paper-night{background:#24202b;color:#d5c9df}.novel-body{max-width:720px;margin:0 auto}.novel-width-wide .novel-body{max-width:980px}.novel-body p{white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 1.1em}.novel-body h2{font-size:1.18em;line-height:1.6;color:inherit;margin:1.6em 0 .85em;font-weight:650}.viewer-auto-next{display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;padding:9px 14px;background:#f8f0fc;border:1px solid #e8d9ef;color:#86649b;font-size:11px}.viewer-auto-next button{font-size:10px;padding:6px 9px}.viewer-series-end{margin:0;padding:8px;text-align:center;font-size:10px;color:#b09eaa;background:#fcf9fd}.viewer-surface:fullscreen .viewer-series-toolbar,.viewer-surface:fullscreen .novel-contents{flex-shrink:0}.viewer-surface:fullscreen .viewer-series-end{display:none}
+</style>
+
+<style scoped>
+.viewer-state-actions{display:flex;justify-content:flex-end;padding:12px 15px;background:#fff;flex-shrink:0}.viewer-surface:is(:fullscreen,.is-immersive) :is(.viewer-loading,.viewer-failure){flex:1;min-height:0;overflow:auto;padding:25px;color:#d5c9df}.viewer-surface:is(:fullscreen,.is-immersive) .viewer-failure h2{color:#d5c9df}
+.viewer-stage.comic-single{touch-action:pan-y pinch-zoom}.viewer-series-toolbar select,.novel-contents select{min-width:0}.viewer-surface.is-immersive{position:fixed;inset:0;z-index:110;display:flex;flex-direction:column;width:100%;height:100dvh;border-radius:0;background:#24202b;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}.viewer-surface.is-immersive .viewer-toolbar{border-radius:0}.viewer-surface.is-immersive .viewer-stage{flex:1;height:auto;min-height:0;max-height:none;width:auto;border:0;border-radius:0}.viewer-surface.is-immersive .viewer-footnote,.viewer-surface.is-immersive .viewer-series-end{display:none}.viewer-surface.is-immersive .viewer-series-toolbar,.viewer-surface.is-immersive .novel-contents{flex-shrink:0}.viewer-surface.is-immersive .viewer-pagination{padding:12px 24px}.viewer-surface:fullscreen{height:100dvh;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+@media(max-width:700px),(max-width:1000px) and (max-height:500px){
+  .viewer-heading{gap:12px;margin-bottom:18px}.viewer-heading p{font-size:9px;margin-bottom:6px}.viewer-heading h1{font-size:20px;margin-bottom:4px}.viewer-heading-actions{gap:10px;width:100%;justify-content:space-between}.viewer-heading-actions>a,.viewer-heading-actions>button{min-height:44px;display:inline-flex;align-items:center;font-size:12px}.viewer-toolbar{gap:8px;padding:9px}.viewer-toolbar-group{gap:5px;max-width:100%;flex-wrap:wrap}.viewer-toolbar-group>span:first-child{display:none}.viewer-toolbar button,.novel-settings summary{min-height:40px;padding:9px 10px;font-size:12px}.viewer-series-toolbar{padding:9px;gap:7px}.viewer-series-toolbar strong{flex-basis:100%;max-width:100%;font-size:12px}.viewer-series-toolbar select{flex:1 1 100%;width:100%;max-width:100%;min-height:42px;font-size:12px}.viewer-series-toolbar button{min-height:40px;font-size:12px;padding:8px 10px}.viewer-stage{height:56dvh;min-height:260px;max-height:none}.viewer-stage.kind-video{min-height:230px}.novel-contents{padding:9px;gap:7px;flex-wrap:wrap}.novel-contents label{font-size:11px}.novel-contents select{max-width:100%;min-height:42px;font-size:12px;flex:1 1 180px}.novel-contents>span{display:none}.viewer-text-scroll{padding:22px 18px;-webkit-overflow-scrolling:touch}.viewer-surface .viewer-pagination{padding:10px 9px;gap:8px}.viewer-pagination>button{min-height:44px;font-size:12px;padding:8px 10px;flex:1 1 auto}.viewer-pagination>form{justify-content:center;gap:7px;order:3;flex-basis:100%}.viewer-pagination input{min-height:42px;width:66px;font-size:14px}.viewer-pagination form>button{min-height:42px;font-size:12px}.viewer-auto-next{font-size:12px;padding:10px}.viewer-auto-next>span{flex-basis:100%;text-align:center;overflow-wrap:anywhere}.viewer-auto-next button{min-height:40px;font-size:12px}.novel-settings>div{position:fixed;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));top:auto;bottom:calc(87px + env(safe-area-inset-bottom,0px));min-width:0;z-index:120;padding:16px;border-radius:16px;box-shadow:0 6px 45px #37214a35}.novel-settings label{font-size:13px}.novel-settings select{width:58%;min-height:44px;font-size:13px}.viewer-surface:is(:fullscreen,.is-immersive) .novel-settings>div{bottom:calc(20px + env(safe-area-inset-bottom,0px))}.viewer-surface:is(:fullscreen,.is-immersive) .viewer-series-toolbar strong{display:none}.viewer-surface:is(:fullscreen,.is-immersive) .viewer-series-toolbar select{flex:1 1 110px;width:auto}.viewer-surface:is(:fullscreen,.is-immersive) .viewer-series-toolbar{max-height:160px;overflow:auto}.viewer-surface:is(:fullscreen,.is-immersive) .viewer-pagination{padding:8px}.viewer-surface:is(:fullscreen,.is-immersive) .viewer-pagination>form{order:0;flex:0 1 auto}.viewer-surface:is(:fullscreen,.is-immersive) .viewer-pagination>button{flex:0 1 auto}.viewer-float-page{width:40px;min-height:64px}.viewer-float-page.previous{left:max(7px,env(safe-area-inset-left,0px))}.viewer-float-page.next{right:max(7px,env(safe-area-inset-right,0px))}
+}
+@media(max-width:1000px) and (max-height:500px){.viewer-surface:is(:fullscreen,.is-immersive) .viewer-toolbar{padding:5px 9px;flex-wrap:nowrap}.viewer-surface:is(:fullscreen,.is-immersive) .viewer-toolbar-group{flex-wrap:nowrap}.viewer-surface:is(:fullscreen,.is-immersive) .viewer-series-toolbar{padding:5px 9px;max-height:110px}.viewer-surface:is(:fullscreen,.is-immersive) .novel-contents{padding:5px 9px}.viewer-surface:is(:fullscreen,.is-immersive) .viewer-stage{min-height:80px}.viewer-surface:is(:fullscreen,.is-immersive) .viewer-pagination{padding:4px 9px}.viewer-surface:is(:fullscreen,.is-immersive) .viewer-toolbar button{min-height:36px}}
 </style>

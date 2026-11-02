@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { isTauriRuntime } from "@/shared/runtime";
 
 const pending = new Map<string, Promise<string>>();
@@ -23,7 +23,7 @@ export function loadMediaImage(raw: string, refresh = false): Promise<string> {
     request = slot(async () => {
       const result = await invoke<{ cacheKey: string; mimeType: string }>("media_image_request", { url });
       if (!/^[a-f0-9]+$/i.test(result.cacheKey)) throw new Error("封面缓存标识无效");
-      return "http://acgn-image.localhost/" + result.cacheKey;
+      return convertFileSrc(result.cacheKey, "acgn-image");
     }).catch((cause) => { pending.delete(url); throw cause; });
     pending.set(url, request);
     if (pending.size > 1000) pending.delete(pending.keys().next().value!);

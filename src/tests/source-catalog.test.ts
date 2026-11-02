@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SourceConfig } from "@/domain/source";
-import { filterSourcesByType, getSourceCapability, getSourcePriority, getSourceUsage, sourceSupportsType } from "@/infrastructure/sources/source-catalog";
+import { filterSourcesByType, filterSourcesForPlatform, getSourceCapability, getSourcePriority, getSourceUsage, sourcePlatformUnavailableReason, sourceSupportsType } from "@/infrastructure/sources/source-catalog";
 import { DEFAULT_RESOURCE_SOURCE_CONFIGS } from "@/infrastructure/sources/default-sources";
 
 function source(type: SourceConfig["type"], overrides: Partial<SourceConfig> = {}): SourceConfig {
@@ -8,6 +8,24 @@ function source(type: SourceConfig["type"], overrides: Partial<SourceConfig> = {
 }
 
 describe("source catalog", () => {
+  it("filters Python video bridges on Android while preserving native downloads and saved configurations", () => {
+    const list = [source("public_video", { enabled: true }), source("jmcomic"), source("mangabz"), source("lnovel"), source("shinnku"), source("rss")];
+    const before = JSON.stringify(list);
+    expect(filterSourcesForPlatform(list, true).map((config) => config.type)).toEqual(["mangabz", "lnovel", "shinnku", "rss"]);
+    expect(filterSourcesForPlatform(list, false)).toEqual(list);
+    expect(sourcePlatformUnavailableReason("public_video", true)).toContain("电脑版");
+    expect(sourcePlatformUnavailableReason("public_video", false)).toBeUndefined();
+    expect(JSON.stringify(list)).toBe(before);
+  });
+
+  it("describes Android RSS as an index without promising a local BT engine", () => {
+    const config = source("rss", { url: "https://mikanani.me/RSS/Classic" });
+    const mobile = getSourceUsage(config, true);
+    expect(mobile.requirements.join(" ")).toContain("磁力与种子下载需电脑版");
+    expect(mobile.description).toContain("仅 HTTP/HTTPS 文件直链");
+    expect(mobile.description).not.toMatch(/aria2|qBittorrent/);
+    expect(getSourceUsage(config, false).description).toContain("aria2");
+  });
   it.each(["https://mikanani.me/RSS/Classic", "https://www.mikanani.me/RSS/Classic", "https://acgnx.se/rss.xml", "https://share.acgnx.se/rss.xml", "https://nyaa.si/?page=rss", "https://api.anime.garden/feed"])("keeps the recognized anime feed %s out of book and game choices", (url) => {
     const config = source("rss", { url });
     expect(getSourceCapability(config).supportedTypes).toEqual(["anime"]);

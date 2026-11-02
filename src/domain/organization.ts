@@ -81,6 +81,33 @@ export function sanitizeFileName(value: string, fallback = "未命名"): string 
   return normalized.slice(0, 180);
 }
 
+/** Android/ext4 counts UTF-8 bytes, whereas Windows counts UTF-16 characters. */
+export function sanitizeMobileFileName(value: string, fallback = "未命名"): string {
+  const cleaned = value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/g, "").trim();
+  const name = (!cleaned || cleaned === "." || cleaned === ".." ? fallback
+    : RESERVED_NAMES.test(cleaned) || cleaned.startsWith(".") ? `_${cleaned}` : cleaned).replace(/[\uD800-\uDFFF]/gu, "\uFFFD");
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(name);
+  if (bytes.length <= 220) return name;
+  // Preserve split archive suffixes as well as reader file extensions. A stable
+  // digest keeps two titles differing beyond the cut from claiming one output.
+  const suffix = name.match(/(?:\.part\d{1,8}\.rar|\.(?:7z|zip)\.\d{3,8}|\.tar\.(?:gz|xz|bz2)|\.[a-z\d]{1,12})$/i)?.[0] ?? "";
+  const stem = suffix ? name.slice(0, -suffix.length) : name;
+  let hash = 0x811c9dc5;
+  for (const byte of encoder.encode(stem)) hash = Math.imul(hash ^ byte, 0x01000193) >>> 0;
+  const tail = `~${hash.toString(16).padStart(8, "0")}${suffix}`;
+  // Reserve the same suffix space for .001/.002 and .part09/.part10 so their
+  // shared archive stem is shortened identically and remains extractable.
+  const budget = 220 - 9 - Math.max(24, encoder.encode(suffix).length);
+  let used = 0; let prefix = "";
+  for (const character of stem) {
+    const length = encoder.encode(character).length;
+    if (used + length > budget) break;
+    prefix += character; used += length;
+  }
+  return prefix.replace(/[. ]+$/g, "") + tail;
+}
+
 export function detectEpisode(value: string): { season: number; episode: number } | undefined {
   const patterns = [
     /\bS(\d{1,2})\s*E(\d{1,3})\b/i,
@@ -97,18 +124,24 @@ export function detectEpisode(value: string): { season: number; episode: number 
 }
 
 export function isPathInside(root: string, target: string): boolean {
+  if (root.startsWith("/") && !root.startsWith("//")) {
+    const base = root.replace(/\/+$/, "") || "/";
+    if (!target.startsWith("/") || target.includes("\\") || target.split("/").some((part) => part === "." || part === "..")) return false;
+    return target === base || target.startsWith(base === "/" ? "/" : base + "/");
+  }
   const normalizedRoot = normalizeForComparison(root);
   const normalizedTarget = normalizeForComparison(target);
   return normalizedTarget === normalizedRoot || normalizedTarget.startsWith(`${normalizedRoot}\\`);
 }
 
 export function joinWindowsPath(root: string, ...segments: string[]): string {
+  const posix = root.startsWith("/") && !root.startsWith("//");
   const safeSegments = segments.map((segment) => {
-    const safe = sanitizeFileName(segment);
+    const safe = posix ? sanitizeMobileFileName(segment) : sanitizeFileName(segment);
     if (safe.includes("\\") || safe.includes("/")) throw new Error("整理路径片段无效");
     return safe;
   });
-  return [root.replace(/[\\/]+$/g, ""), ...safeSegments].join("\\");
+  return [root.replace(/[\\/]+$/g, ""), ...safeSegments].join(posix ? "/" : "\\");
 }
 
 function normalizeAbsoluteWindowsPath(value: string, label: string): string {

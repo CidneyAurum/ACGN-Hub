@@ -509,3 +509,68 @@ button.summary-card:hover { border-color: #9cced1; background: #fbfefe; }
   .summary-card { padding: 1rem; }
   .summary-card strong { font-size: 1.6rem; }
 }
+
+/* Phone layouts keep every tool reachable and leave room for system gestures. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body.viewer-immersive { overflow: hidden; }
+@media (max-width: 700px), (max-width: 1000px) and (max-height: 500px) {
+  #main-content { overflow-wrap: anywhere; }
+  #main-content :is(.card, .card-heading, .task-row, .task-main, .task-actions, .resource-work-card, .resource-work-content, .source-row, .source-content) { min-width: 0; }
+  #main-content .card { padding: 17px; border-radius: 14px; }
+  #main-content :is(.page-heading, .card-heading, .book-intro, .book-section-heading, .gal-section-heading) { flex-wrap: wrap; gap: 14px; }
+  #main-content :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { font-size: 16px; min-width: 0; max-width: 100%; }
+  #main-content :is(.primary-button, .ghost-button, .small-button) { min-height: 44px; white-space: normal; line-height: 1.4; }
+  #main-content :is(.task-actions, .form-footer, .list-toolbar) { flex-wrap: wrap; gap: 8px; }
+  #main-content .task-actions { justify-content: flex-start; margin-left: 0; }
+  #main-content .task-actions > :is(button, a) { flex: 0 1 auto; }
+  #main-content .task-title-line { flex-wrap: wrap; }
+  #main-content .task-title-line strong { white-space: normal; overflow-wrap: anywhere; }
+  #main-content :is(.task-meta, .source-url, code, .hint, .error-message) { overflow-wrap: anywhere; word-break: break-word; }
+  #main-content .settings-savebar { bottom: calc(82px + env(safe-area-inset-bottom, 0px)); padding: 13px; }
+  #main-content .settings-savebar .task-actions { margin-left: 0; justify-content: stretch; }
+  #main-content .settings-savebar .task-actions > button { flex: 1; }
+  #main-content :is(.credentials-grid, .download-series-grid) { grid-template-columns: minmax(0, 1fr); }
+  #main-content .summary-grid { gap: 10px; }
+  #main-content .summary-card { min-width: 0; padding: 13px; }
+  #main-content .resource-type-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; }
+  #main-content .resource-type-tabs button { min-width: 0; min-height: 44px; padding: 8px 3px; font-size: 13px; }
+  #main-content .resource-search-panel { padding: 17px; }
+  #main-content .resource-search-panel form { flex-wrap: wrap; }
+  #main-content .resource-source { flex: 1 1 100%; width: 100%; }
+  #main-content .resource-search-panel form > button { width: 100%; }
+  #main-content .resource-work-grid { grid-template-columns: minmax(0, 1fr); }
+  #main-content .resource-work-card { padding: 13px; gap: 12px; }
+  #main-content .resource-work-cover { width: 76px; height: 112px; }
+  #main-content .resource-work-content .small-button { width: 100%; }
+  #main-content .discover-kind-switch { width: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  #main-content .discover-kind-switch button { min-height: 44px; padding: 8px 4px; font-size: 13px; }
+  #main-content :is(.book-catalog-actions, .gal-catalog-actions) { width: 100%; }
+  #main-content :is(.book-catalog-actions label, .gal-catalog-actions label) { flex: 1; }
+  #main-content :is(.book-catalog-actions select, .gal-catalog-actions select) { width: 100%; max-width: none; font-size: 14px; min-height: 44px; }
+  #main-content :is(.book-refresh, .gal-refresh, .book-open, .book-wish, .gal-primary, .gal-secondary) { min-height: 44px; }
+  #main-content .book-intro { flex-direction: column; align-items: flex-start; }
+  #main-content .book-spotlight { grid-template-columns: minmax(0, 1fr) 90px; padding: 20px 16px; gap: 14px; }
+  #main-content :is(.book-feature-covers, .book-feature-cover) { width: 90px; }
+  #main-content .book-feature-covers { align-self: start; margin-top: 26px; }
+  #main-content .book-feature-copy h2 { font-size: 22px; }
+  #main-content .book-section-heading h2 { font-size: 18px; }
+  #main-content .book-search-link { min-height: 44px; }
+  #main-content .book-catalog-footer { align-items: flex-start; flex-direction: column; gap: 12px; }
+  #main-content .book-catalog-footer > p { max-width: 100%; }
+  #main-content .book-shelf-hint > a { margin-left: 0; min-height: 38px; }
+  #main-content :is(.book-empty > div, .gal-empty > div) { flex-wrap: wrap; }
+  #main-content .season-controls label { min-width: 0; flex: 1 1 110px; }
+  #main-content .season-controls select { min-width: 0; }
+}
+@media (max-width: 360px) {
+  #main-content :is(.poster-wall, .book-wall, .gal-wall, .collection-grid, .poster-results-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #main-content .book-spotlight { grid-template-columns: minmax(0, 1fr) 75px; gap: 12px; }
+  #main-content :is(.book-feature-covers, .book-feature-cover) { width: 75px; }
+  #main-content .resource-work-cover { width: 60px; height: 90px; }
+}
+
+/* A short landscape viewport cannot fit a sticky bar above its form's top
+   boundary and the phone navigation at once. Keep saving in the normal flow. */
+@media (max-width: 1000px) and (max-height: 500px) {
+  #main-content .settings-savebar { position: static; }
+}

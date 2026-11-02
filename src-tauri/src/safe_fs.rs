@@ -20,6 +20,7 @@ pub fn has_parent_component(path: &Path) -> bool {
         .any(|part| matches!(part, Component::ParentDir))
 }
 
+#[cfg(windows)]
 fn normalized(path: &Path) -> String {
     let value = path.to_string_lossy().replace('/', "\\").to_lowercase();
     if let Some(tail) = value.strip_prefix(r"\\?\unc\") {
@@ -32,10 +33,24 @@ fn normalized(path: &Path) -> String {
         .to_string()
 }
 
+#[cfg(not(windows))]
+fn normalized(path: &Path) -> PathBuf {
+    // Android/Linux paths are case-sensitive and a backslash is a literal file
+    // name character. Windows normalization would accept an unrelated sibling.
+    path.to_path_buf()
+}
+
 pub fn is_path_within(root: &Path, target: &Path) -> bool {
+    #[cfg(windows)]
+    {
     let root = normalized(root);
     let target = normalized(target);
     target == root || target.starts_with(&format!("{root}\\"))
+    }
+    #[cfg(not(windows))]
+    {
+        target.starts_with(root)
+    }
 }
 
 pub fn require_child(root: &Path, target: &Path, label: &str) -> Result<(), String> {
@@ -180,6 +195,8 @@ pub fn output_path(root: &str, output: &str, extension: &str) -> Result<PathBuf,
 
 /// Publish a complete file atomically without replacing an existing destination.
 /// Windows uses a same-volume move, which also supports exFAT/FAT32 portable drives.
+/// Android uses renameat2(RENAME_NOREPLACE), so SELinux hard-link restrictions
+/// cannot turn successful TXT/CBZ downloads into publication failures.
 /// A failed operation only removes the private staging file.
 pub struct AtomicOutput {
     path: PathBuf,
@@ -226,7 +243,7 @@ impl AtomicOutput {
 }
 
 #[cfg(windows)]
-fn publish_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+pub(crate) fn publish_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     #[link(name = "kernel32")]
     extern "system" {
@@ -246,8 +263,27 @@ fn publish_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> 
     Ok(())
 }
 
-#[cfg(not(windows))]
-fn publish_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+#[cfg(target_os = "android")]
+pub(crate) fn publish_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let source = std::ffi::CString::new(source.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "source path contains NUL"))?;
+    let destination = std::ffi::CString::new(destination.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "destination path contains NUL"))?;
+    // Bionic's renameat2 wrapper was introduced in API 30. Calling the Linux
+    // syscall keeps minSdk 26 support, using libc's ABI-specific syscall number.
+    // SELinux can prohibit hard links even within an app's own files directory.
+    // RENAME_NOREPLACE is atomic; unsupported kernels fail without a racy fallback.
+    let result = unsafe {
+        libc::syscall(libc::SYS_renameat2, libc::AT_FDCWD, source.as_ptr(),
+            libc::AT_FDCWD, destination.as_ptr(), libc::RENAME_NOREPLACE)
+    };
+    if result == -1 { return Err(std::io::Error::last_os_error()); }
+    Ok(())
+}
+
+#[cfg(all(not(windows), not(target_os = "android")))]
+pub(crate) fn publish_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
     fs::hard_link(source, destination)
 }
 
@@ -259,7 +295,15 @@ impl Drop for AtomicOutput {
 }
 
 pub fn move_file_no_replace(source: &Path, destination: &Path) -> Result<(), String> {
-    if fs::hard_link(source, destination).is_err() {
+    #[cfg(target_os = "android")]
+    {
+        if publish_no_replace(source, destination).is_ok() { return Ok(()); }
+    }
+    #[cfg(not(target_os = "android"))]
+    let published = fs::hard_link(source, destination).is_ok();
+    #[cfg(target_os = "android")]
+    let published = false;
+    if !published {
         let mut atomic = AtomicOutput::new(destination.to_path_buf())?;
         let mut output = atomic.take_file();
         let mut input =
@@ -278,6 +322,24 @@ pub fn move_file_no_replace(source: &Path, destination: &Path) -> Result<(), Str
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "android")]
+    #[test]
+    fn android_publish_renames_without_replacing_any_destination() {
+        let root = temporary();
+        let source = root.join("owned.part");
+        let target = root.join("已完成.txt");
+        fs::write(&source, b"complete").unwrap();
+        fs::write(&target, b"personal").unwrap();
+        assert!(publish_no_replace(&source, &target).is_err());
+        assert_eq!(fs::read(&source).unwrap(), b"complete");
+        assert_eq!(fs::read(&target).unwrap(), b"personal");
+        fs::remove_file(&target).unwrap();
+        publish_no_replace(&source, &target).unwrap();
+        assert!(!source.exists());
+        assert_eq!(fs::read(&target).unwrap(), b"complete");
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[cfg(windows)]
     #[test]
     fn canonical_unc_children_match_normal_share_roots_without_matching_siblings() {
         let root = Path::new(r"\\server\share\轻小说");
@@ -285,6 +347,15 @@ mod tests {
         assert!(is_path_within(Path::new(r"\\?\UNC\server\share\轻小说"), Path::new(r"\\server\share\轻小说\第一卷.txt")));
         assert!(!is_path_within(root, Path::new(r"\\?\UNC\server\share\轻小说备份\第一卷.txt")));
         assert!(!is_path_within(root, Path::new(r"\\?\UNC\server\other\轻小说\第一卷.txt")));
+    }
+    #[cfg(not(windows))]
+    #[test]
+    fn unix_roots_are_case_sensitive_and_compare_path_components() {
+        let root = Path::new("/data/user/0/local.acgnhub/Files");
+        assert!(is_path_within(root, &root.join("Library/第一卷.txt")));
+        assert!(!is_path_within(root, Path::new("/data/user/0/local.acgnhub/files/第一卷.txt")));
+        assert!(!is_path_within(root, Path::new("/data/user/0/local.acgnhub/Files-other/第一卷.txt")));
+        assert!(!is_path_within(root, Path::new("/data/user/0/local.acgnhub/Files\\第一卷.txt")));
     }
     use super::*;
     fn temporary() -> PathBuf {

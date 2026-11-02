@@ -14,6 +14,8 @@ mod image_format;
 mod local_viewer;
 mod manga_downloads;
 mod media_images;
+mod mobile_http;
+mod mobile_files;
 mod network;
 mod process_runner;
 mod portable_profile;
@@ -264,6 +266,9 @@ async fn jmcomic_bridge(
     output_dir: Option<String>,
     incoming_root: Option<String>,
 ) -> Result<Value, String> {
+    if cfg!(mobile) {
+        return Err("JM Python 桥接仅适用于桌面端；安卓端请选择原生 HTTP 漫画来源".into());
+    }
     run_blocking(move || jmcomic_bridge_impl(action, value, output_dir, incoming_root)).await
 }
 
@@ -858,6 +863,9 @@ fn collect_game_files(path: &Path, root: &Path, state: &mut GameScanState) -> Re
 
 #[tauri::command]
 fn launch_game(root_path: String, launch_path: String) -> Result<(), String> {
+    if !cfg!(windows) {
+        return Err("Windows EXE 游戏只能在 Windows 端启动；安卓端可浏览和收藏 Galgame 资料".into());
+    }
     let root = std::fs::canonicalize(validate_absolute_path(&root_path, "游戏目录")?)
         .map_err(|error| format!("游戏目录不可用：{error}"))?;
     if !root.is_dir() {
@@ -1134,15 +1142,19 @@ fn organize_file_impl(
         return Err("源文件不在 Incoming 根目录内，已拒绝整理".to_string());
     }
 
-    let library = std::path::PathBuf::from(&library_root);
-    if !library.is_absolute() {
+    let declared_library = std::path::PathBuf::from(&library_root);
+    if !declared_library.is_absolute() {
         return Err("Library 根目录必须是绝对路径".to_string());
     }
+    std::fs::create_dir_all(&declared_library)
+        .map_err(|error| format!("创建 Library 根目录失败：{error}"))?;
+    let library = std::fs::canonicalize(&declared_library)
+        .map_err(|error| format!("校验 Library 根目录失败：{error}"))?;
     let destination = std::path::PathBuf::from(&destination_path);
     let parent = destination
         .parent()
         .ok_or_else(|| "整理目标缺少父目录".to_string())?;
-    if !is_path_within(&library, parent) {
+    if !is_path_within(&declared_library, parent) && !is_path_within(&library, parent) {
         return Err("整理目标越出 Library 根目录，已拒绝整理".to_string());
     }
 
@@ -1157,6 +1169,10 @@ fn organize_file_impl(
         return Err("目标文件已存在，为避免覆盖已停止整理".to_string());
     }
 
+    let existing_parent = safe_fs::canonical_existing_ancestor(parent)?;
+    if !is_path_within(&library, &existing_parent) {
+        return Err("整理目标越出 Library 根目录，已拒绝整理".to_string());
+    }
     std::fs::create_dir_all(parent).map_err(|error| format!("创建 Library 子目录失败：{error}"))?;
     let canonical_parent =
         std::fs::canonicalize(parent).map_err(|error| format!("校验整理目标目录失败：{error}"))?;
@@ -1351,6 +1367,9 @@ fn is_private_feed_host(host: &str) -> bool {
 
 #[tauri::command]
 fn open_directory(path: String) -> Result<(), String> {
+    if cfg!(mobile) {
+        return Err("安卓端文件保存在应用私有目录，请从下载页使用内置阅读器打开".into());
+    }
     let directory = std::path::PathBuf::from(path);
     let target = if directory.is_dir() {
         directory
@@ -1470,7 +1489,7 @@ pub fn run() {
             window.create = false;
         }
     }
-    let exit_code = tauri::Builder::default()
+    let application = tauri::Builder::default()
         .on_page_load(|_webview, payload| {
             if matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
                 local_viewer::reset_local_viewer_sessions();
@@ -1485,6 +1504,7 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(mobile_files::init())
         .setup(move |app| {
             diagnostics::initialize(app.handle()).map_err(std::io::Error::other)?;
             if let Some(profile) = &profile {
@@ -1513,6 +1533,12 @@ pub fn run() {
             runtime::aria2_rpc,
             runtime::ensure_local_aria2,
             runtime::get_runtime_defaults,
+            mobile_http::mobile_http_start,
+            mobile_http::mobile_http_status,
+            mobile_http::mobile_http_pause,
+            mobile_http::mobile_http_resume,
+            mobile_http::mobile_http_cancel,
+            mobile_files::share_downloaded_file,
             portable_profile::get_portable_profile,
             portable_profile::relocate_portable_profile,
             qbittorrent::qbittorrent_request,
@@ -1534,8 +1560,8 @@ pub fn run() {
             delete_download_files
         ])
         .build(context)
-        .expect("error while building ACGN Hub")
-        .run_return(|_, event| match event {
+        .expect("error while building ACGN Hub");
+    let on_event = |_: &tauri::AppHandle, event| match event {
             tauri::RunEvent::Ready => diagnostics::record("runtime.ready"),
             tauri::RunEvent::ExitRequested { code, .. } => {
                 diagnostics::record(&format!("runtime.exit_requested code={code:?}"))
@@ -1554,10 +1580,19 @@ pub fn run() {
                 runtime::stop_owned_aria2();
             }
             _ => {}
-        });
+        };
+    // Mobile uses Tauri's native Activity event loop. Its underlying tao::run
+    // exits the process when the last Activity is destroyed; MainActivity's root
+    // Back fallback moves the task to the background to preserve that lifecycle.
+    #[cfg(mobile)]
+    application.run(on_event);
+    #[cfg(not(mobile))]
+    {
+    let exit_code = application.run_return(on_event);
     diagnostics::record(&format!("runtime.event_loop_returned code={exit_code}"));
     runtime::stop_owned_aria2();
     std::process::exit(exit_code);
+    }
 }
 
 #[cfg(test)]
@@ -1607,6 +1642,85 @@ mod tests {
         ));
         std::fs::create_dir(&root).unwrap();
         root
+    }
+
+    #[cfg(unix)]
+    fn directory_alias(target: &std::path::Path, alias: &std::path::Path) {
+        std::os::unix::fs::symlink(target, alias).unwrap();
+    }
+
+    #[cfg(windows)]
+    fn directory_alias(target: &std::path::Path, alias: &std::path::Path) {
+        let result = std::process::Command::new("cmd.exe")
+            .args(["/d", "/c", "mklink", "/J"])
+            .arg(dunce::simplified(alias).to_string_lossy().replace('/', "\\"))
+            .arg(dunce::simplified(target).to_string_lossy().replace('/', "\\"))
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "Could not create test directory alias: {} {}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+
+    #[cfg(unix)]
+    fn remove_directory_alias(alias: &std::path::Path) {
+        std::fs::remove_file(alias).unwrap();
+    }
+
+    #[cfg(windows)]
+    fn remove_directory_alias(alias: &std::path::Path) {
+        std::fs::remove_dir(alias).unwrap();
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn organize_accepts_private_root_alias_and_rejects_outside_library_ancestor() {
+        let root = temporary_root();
+        let actual = root.join("actual-profile");
+        let alias = root.join("profile-alias");
+        let incoming = actual.join("Files/Incoming");
+        let library = actual.join("Files/Library");
+        std::fs::create_dir_all(&incoming).unwrap();
+        std::fs::create_dir_all(&library).unwrap();
+        directory_alias(&actual, &alias);
+        let alias_incoming = alias.join("Files/Incoming");
+        let alias_library = alias.join("Files/Library");
+        let source = incoming.join("download.txt");
+        std::fs::write(&source, "完整下载内容").unwrap();
+        let canonical_source = std::fs::canonicalize(&source).unwrap();
+        let destination = alias_library.join("Books/作品/第一卷.txt");
+        let organized = super::organize_file_impl(
+            "alias-test".into(),
+            canonical_source.to_string_lossy().into_owned(),
+            destination.to_string_lossy().into_owned(),
+            alias_incoming.to_string_lossy().into_owned(),
+            alias_library.to_string_lossy().into_owned(),
+        ).unwrap();
+        assert_eq!(organized.status, "moved");
+        assert!(!source.exists());
+        assert_eq!(std::fs::read_to_string(&destination).unwrap(), "完整下载内容");
+
+        let outside = root.join("outside");
+        std::fs::create_dir(&outside).unwrap();
+        let link = library.join("OutsideLink");
+        directory_alias(&outside, &link);
+        std::fs::write(&source, "保留源文件").unwrap();
+        let result = super::organize_file_impl(
+            "outside-test".into(),
+            source.to_string_lossy().into_owned(),
+            alias_library.join("OutsideLink/new-directory/book.txt").to_string_lossy().into_owned(),
+            alias_incoming.to_string_lossy().into_owned(),
+            alias_library.to_string_lossy().into_owned(),
+        );
+        assert!(result.is_err());
+        assert_eq!(std::fs::read_to_string(&source).unwrap(), "保留源文件");
+        assert!(!outside.join("new-directory").exists());
+        remove_directory_alias(&link);
+        remove_directory_alias(&alias);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

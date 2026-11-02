@@ -21,7 +21,13 @@ ACGN Hub 使用下列第三方组件及公开服务。本文件保留已核对�
 
 Rust 使用 Tauri、serde、serde_json、reqwest、tokio、sqlx、zip、sha1、sha2、dunce、base64 等锁定依赖。各 crate 的上游版权、许可和附带通知继续适用；本文件中的选列不代表对 Cargo.lock 所有平台、构建及传递依赖完成了全量许可核查。发布者应随实际分发组件保留相应通知。
 
-## 可选本机工具
+## Android 客户端组件
+
+Android 版使用 Tauri / Wry 的 Android 运行层，以及 AndroidX、Material Components for Android、Kotlin 标准库等依赖。AndroidX、Material 与 Kotlin 的相关组件采用 Apache License 2.0；原文随应用“设置 → 关于与第三方组件声明”提供，并保留于 [third_party/android/Apache-2.0.txt](third_party/android/Apache-2.0.txt)。具体版本以 Android Gradle 工程及实际解析的依赖为准。Android SDK、NDK、JDK 与 Gradle 是构建工具，不打入应用。
+
+出处：[AndroidX](https://github.com/androidx/androidx)、[Material Components](https://github.com/material-components/material-components-android)、[Kotlin](https://github.com/JetBrains/kotlin)。本段不将这些许可套用到应用自有代码或无关组件。
+
+## 可选本机工具（桌面版）
 
 qBittorrent、Python、yt-dlp、FFmpeg / imageio-ffmpeg、jmcomic 是用户本机可选工具或包，当前仓库不包含这些程序的二进制。桥接代码调用其公开接口；各工具原有许可随各自安装包保留。NDM 仅用于架构研究，没有复制、链接或分发其项目源码、helper 或安装包；见 [NDM参考记录](docs/research/ndm-integration-assessment.md)。
 

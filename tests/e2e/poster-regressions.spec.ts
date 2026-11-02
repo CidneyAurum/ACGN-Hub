@@ -21,9 +21,9 @@ async function mountPosters(page: Page, posters: PosterFixture[], noObserver = f
   await page.route(/\/src\/infrastructure\/media\/image-loader\.ts(?:\?.*)?$/, async (route) => {
     const response = await route.fetch();
     const source = await response.text();
-    const boundary = /import\s*\{\s*invoke\s*\}\s*from\s*["'][^"']+["'];?/;
+    const boundary = /import\s*\{[^}]*\binvoke\b[^}]*\}\s*from\s*["'][^"']+["'];?/;
     if (!boundary.test(source)) throw new Error("Image native boundary changed");
-    await route.fulfill({ response, body: source.replace(boundary, "const invoke = (command, args) => window.__posterRequest(command, args);") });
+    await route.fulfill({ response, body: source.replace(boundary, "const invoke = (command, args) => window.__posterRequest(command, args); const convertFileSrc = (key, protocol) => 'http://' + protocol + '.localhost/' + key;") });
   });
   await page.route("http://acgn-image.localhost/**", (route) => route.fulfill({ status: 200, contentType: route.request().url().endsWith("/bad") ? "image/png" : "image/svg+xml", body: route.request().url().endsWith("/bad") ? "invalid image" : svg }));
   await page.route("https://covers.fixture.test/**", (route) => route.fulfill({ status: 200, contentType: fixture.broken.has(route.request().url()) ? "image/png" : "image/svg+xml", body: fixture.broken.has(route.request().url()) ? "invalid image" : svg }));

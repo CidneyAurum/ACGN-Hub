@@ -1,14 +1,14 @@
 import type { DownloadEngine, TaskRepository } from "./ports";
 import type { DownloadEngineSettings, DownloadOptions, DownloadTask, DownloadState, DownloadStatus, DownloadNaming } from "@/domain/download";
 import { canTransition } from "@/domain/state-machine";
-import { sanitizeFileName } from "@/domain/organization";
+import { sanitizeFileName, sanitizeMobileFileName } from "@/domain/organization";
 import { assertDownloadDirectory, normalizeDedupeKey, parseDownloadTarget } from "@/shared/validation";
 import { newId, nowIso } from "@/shared/runtime";
 
 export interface DownloadManagerDependencies {
   repository: TaskRepository;
   engine(id: string, endpoint?: string): DownloadEngine;
-  settings(): { maxConcurrentDownloads: number; speedLimitBytesPerSecond: number; aria2Endpoint?: string; qbittorrentEndpoint?: string; btDownloadEngine?: "aria2" | "qbittorrent" };
+  settings(): { maxConcurrentDownloads: number; speedLimitBytesPerSecond: number; aria2Endpoint?: string; qbittorrentEndpoint?: string; btDownloadEngine?: "aria2" | "qbittorrent"; httpDownloadEngine?: "aria2" | "mobile_http" };
   onChange(tasks: DownloadTask[]): void;
   onComplete?(task: DownloadTask): void;
 }
@@ -42,7 +42,7 @@ export class DownloadManager {
             errorCode: undefined, error: "引擎会话已更新，正在恢复原始链接。", speedBytesPerSecond: 0, updatedAt: nowIso() });
           continue;
         }
-        const expected = task.protocol === "http" ? "aria2" : ["aria2", "qbittorrent"].includes(task.engineId) ? task.engineId : this.deps.settings().btDownloadEngine ?? "aria2";
+        const expected = task.protocol === "http" ? this.deps.settings().httpDownloadEngine ?? "aria2" : ["aria2", "qbittorrent"].includes(task.engineId) ? task.engineId : this.deps.settings().btDownloadEngine ?? "aria2";
         if (task.engineId !== expected && ["http", "magnet", "torrent"].includes(task.protocol)) {
           await this.save({ ...task, engineId: expected, engineEndpoint: this.endpointFor(expected), engineTaskId: undefined, state: ["completed", "cancelled"].includes(task.state) ? task.state : "paused", error: "下载引擎已更新，点击继续恢复任务。", updatedAt: nowIso() });
         } else if (!task.engineEndpoint && this.endpointFor(task.engineId)) {
@@ -59,18 +59,19 @@ export class DownloadManager {
     let createdId = "";
     const operation = this.additions.catch(() => undefined).then(async () => {
       const target = parseDownloadTarget(rawUrl);
+      if (this.deps.settings().httpDownloadEngine === "mobile_http" && target.protocol !== "http") throw new Error("安卓版本暂不支持磁力或种子，请选择 HTTP/HTTPS 文件链接");
       const dedupeKey = normalizeDedupeKey(target.url);
       if (this.tasks.some((task) => {
         try { return normalizeDedupeKey(task.sourceUrl) === dedupeKey; } catch { return task.dedupeKey === dedupeKey; }
       })) throw new Error("相同链接已有下载任务，可在下载中心继续或重试。");
       const timestamp = nowIso();
       const filename = association.filename ?? target.filename;
-      const engineId = target.protocol === "http" ? "aria2" : this.deps.settings().btDownloadEngine ?? "aria2";
+      const engineId = target.protocol === "http" ? this.deps.settings().httpDownloadEngine ?? "aria2" : this.deps.settings().btDownloadEngine ?? "aria2";
       const task: DownloadTask = {
         id: newId(), engineId,
         engineEndpoint: this.endpointFor(engineId),
         ...association, sourceUrl: target.url, protocol: target.protocol,
-        directory: assertDownloadDirectory(directory), ...(filename ? { filename: sanitizeFileName(filename) } : {}),
+        directory: assertDownloadDirectory(directory), ...(filename ? { filename: engineId === "mobile_http" ? sanitizeMobileFileName(filename) : sanitizeFileName(filename) } : {}),
         state: "queued", totalBytes: 0, completedBytes: 0, speedBytesPerSecond: 0,
         files: [], dedupeKey, createdAt: timestamp, updatedAt: timestamp,
       };
@@ -116,7 +117,7 @@ export class DownloadManager {
     if (status.errorCode === "ENGINE_TASK_NOT_FOUND") {
       const paused = task.state === "paused";
       // Missing qBittorrent tasks may have been deliberately removed outside this app.
-      const recover = task.engineId === "aria2";
+      const recover = task.engineId === "aria2" || task.engineId === "mobile_http";
       await this.save({ ...task, engineTaskId: undefined, state: paused ? "paused" : recover ? "queued" : "failed", speedBytesPerSecond: 0,
         stage: undefined, peers: undefined, connections: undefined, seeders: undefined,
         errorCode: recover ? undefined : status.errorCode,
@@ -210,7 +211,7 @@ export class DownloadManager {
     await this.lock(id, async () => {
       const task = this.current(id);
       this.requireState(task, ["failed", "cancelled"], "重试");
-      const keepRemote = task.engineId === "qbittorrent" && task.state === "failed";
+      const keepRemote = ["qbittorrent", "mobile_http"].includes(task.engineId) && task.state === "failed";
       await this.save({ ...task, engineTaskId: keepRemote ? task.engineTaskId : undefined, state: "queued", stage: undefined, error: undefined, errorCode: undefined, speedBytesPerSecond: 0, updatedAt: nowIso() });
       this.clearCancelledRecovery(id);
     });
@@ -339,7 +340,7 @@ export class DownloadManager {
     if (!task) throw new Error("该下载任务已被移除，请刷新列表。");
     return task;
   }
-  private endpointFor(id: string): string | undefined { const settings = this.deps.settings(); return id === "aria2" ? settings.aria2Endpoint : settings.qbittorrentEndpoint; }
+  private endpointFor(id: string): string | undefined { const settings = this.deps.settings(); return id === "aria2" ? settings.aria2Endpoint : id === "qbittorrent" ? settings.qbittorrentEndpoint : undefined; }
   private engine(task: DownloadTask): DownloadEngine { return this.deps.engine(task.engineId, task.engineEndpoint); }
   private rememberCancelled(id: string): void {
     try {

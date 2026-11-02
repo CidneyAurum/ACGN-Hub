@@ -16,7 +16,7 @@ import { loadSettings } from "@/shared/settings";
 import { newId } from "@/shared/runtime";
 import { parseDownloadTarget } from "@/shared/validation";
 import { createMangaChapterService } from "@/infrastructure/manga/tauri-manga-chapter-service";
-import { joinWindowsPath, sanitizeFileName } from "@/domain/organization";
+import { joinWindowsPath, sanitizeFileName, sanitizeMobileFileName } from "@/domain/organization";
 import type { SourceConfig } from "@/domain/source";
 import { createSourceDiagnosticRepository } from "@/infrastructure/database/create-source-diagnostic-repository";
 import type { SourceDiagnosticRepository } from "@/application/source-diagnostic-ports";
@@ -26,13 +26,13 @@ import { useLocalDownloadStore } from "@/stores/local-download";
 import { sourceDescription } from "@/infrastructure/sources/source-availability";
 import { DEFAULT_RESOURCE_SOURCE_CONFIGS } from "@/infrastructure/sources/default-sources";
 import { discoverResources, getResourceWarnings, loadSourceItemResources } from "@/application/resource-discovery";
-import { getSourceCapability, getSourcePriority, sourceSupportsType } from "@/infrastructure/sources/source-catalog";
+import { getSourceCapability, getSourcePriority, sourcePlatformUnavailableReason, sourceSupportsType } from "@/infrastructure/sources/source-catalog";
 import SubjectHero from "@/components/SubjectHero.vue";
 import SubjectResourcePanel from "@/components/SubjectResourcePanel.vue";
 import { useTrackingStore, type TrackingStatus } from "@/stores/tracking";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { downloadPublicVideo } from "@/infrastructure/video/tauri-public-video-service";
-import { isTauriRuntime } from "@/shared/runtime";
+import { isAndroidRuntime, isTauriRuntime } from "@/shared/runtime";
 import { compareGalgameResources, emptyGalgameResourceFilters, galgameDownloadDirectory, galgameDownloadFileName, matchesGalgameResource, resourceMatchesKeywords } from "@/domain/galgame-resource";
 
 const route = useRoute();
@@ -105,6 +105,7 @@ const resourceSourceOptions = computed(() => {
   const configs = [...sourceStore.configs, ...DEFAULT_RESOURCE_SOURCE_CONFIGS.filter((config) => !existingIds.has(config.id) &&
     !sourceStore.configs.some((saved) => saved.type === config.type && saved.url.replace(/\/+$/, "") === config.url.replace(/\/+$/, "")))];
   return configs.filter((config) => sourceSupportsType(config, media.value?.type ?? "anime") &&
+    !sourcePlatformUnavailableReason(config) &&
     (!exactSource.value || config.id === media.value?.metadata.sourceConfigId))
     .sort((left, right) => getSourcePriority(left, media.value?.type) - getSourcePriority(right, media.value?.type))
     .flatMap((config) => {
@@ -294,6 +295,11 @@ async function loadResources(targetMedia: Media): Promise<void> {
     await sourceStore.initialize();
     if (!current()) return;
     if (sourceStore.error) throw new Error(sourceStore.error);
+    if (exactSource.value) {
+      const original = findSourceConfig(String(targetMedia.metadata.sourceConfigId));
+      const unavailable = original && sourcePlatformUnavailableReason(original);
+      if (unavailable) throw new Error(unavailable);
+    }
     const configs = resourceSourceOptions.value.filter((option) => option.config.enabled &&
       (resourceSourceFilter.value === "all" || option.providerId === resourceSourceFilter.value)).map((option) => option.config);
     if (!configs.length) {
@@ -351,6 +357,8 @@ async function enableSourceAndSearch(config: SourceConfig): Promise<void> {
   if (resourceLoading.value) return;
   resourceError.value = "";
   try {
+    const unavailable = sourcePlatformUnavailableReason(config);
+    if (unavailable) throw new Error(unavailable);
     await sourceStore.save({ ...config, enabled: true, updatedAt: new Date().toISOString() });
     resourceSourceFilter.value = createSourceProvider(config).id;
     await requestResourceSearch();
@@ -372,6 +380,7 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
   resourceError.value = "";
   let localTaskId: string | undefined;
   try {
+    if (isAndroidRuntime() && (resource.protocol !== "http" || ["public_video", "jmcomic_cbz"].includes(String(resource.metadata.downloadMode)))) throw new Error("这个下载方式需要电脑版；安卓可使用文件直链、漫画 CBZ 与轻小说 TXT 来源");
     if (resource.metadata.downloadMode === "external_link") {
       const target = new URL(resource.targetUrl);
       if (!["https:", "http:"].includes(target.protocol)) throw new Error("来源链接不是有效的网页地址");
@@ -424,7 +433,9 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
       if (!isAbsoluteWindowsPath(settings.obsidianEbookDirectory)) {
         throw new Error("请先在设置中填写有效的电子书输出目录（绝对路径）");
       }
-      const outputPath = joinWindowsPath(settings.obsidianEbookDirectory, `${sanitizeFileName(`${descriptor.title} - ${descriptor.volume}`).slice(0, 165)}.txt`);
+      const novelFile = isAndroidRuntime() ? sanitizeMobileFileName(`${descriptor.title} - ${descriptor.volume}.txt`)
+        : `${sanitizeFileName(`${descriptor.title} - ${descriptor.volume}`).slice(0, 165)}.txt`;
+      const outputPath = joinWindowsPath(settings.obsidianEbookDirectory, novelFile);
       localTaskId = localDownloadStore.create({
         kind: "novel",
         title: `${descriptor.title} · ${descriptor.volume}`,
@@ -468,8 +479,10 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
       // separate directories instead of overwriting or resuming another book.
       const edition = metadataString(resource, "editionLabel");
       const editionKey = `${sourceConfig?.id ?? resource.sourceId}-${resource.sourceItemId}`;
-      const mangaFile = `${sanitizeFileName(`${descriptor.title} - ${descriptor.chapter}`).slice(0, 165)}.cbz`;
-      const editionDirectory = sanitizeFileName(`${descriptor.title} - ${edition || "来源版本"} - ${resource.sourceItemId}`).slice(0, 140);
+      const mangaFile = isAndroidRuntime() ? sanitizeMobileFileName(`${descriptor.title} - ${descriptor.chapter}.cbz`)
+        : `${sanitizeFileName(`${descriptor.title} - ${descriptor.chapter}`).slice(0, 165)}.cbz`;
+      const editionName = `${descriptor.title} - ${edition || "来源版本"} - ${resource.sourceItemId}`;
+      const editionDirectory = isAndroidRuntime() ? sanitizeMobileFileName(editionName) : sanitizeFileName(editionName).slice(0, 140);
       const outputPath = joinWindowsPath(outputRoot, editionDirectory, mangaFile);
       localTaskId = localDownloadStore.create({
         kind: "manga",
@@ -511,7 +524,7 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
     const directory = targetMedia.type === "visual_novel" ? await galgameDownloadDirectory(configuredDirectory, resource, targetMedia.title) : configuredDirectory;
     const extension = target.filename?.match(/\.[a-z0-9]{2,8}$/i)?.[0] ?? "";
     const filename = targetMedia.type === "visual_novel" && target.protocol === "http"
-      ? galgameDownloadFileName(resource, target.filename) : `${friendlyName}${extension}`;
+      ? galgameDownloadFileName(resource, target.filename) : isAndroidRuntime() ? sanitizeMobileFileName(resource.title + extension, "未命名资源") : `${friendlyName}${extension}`;
     await downloadStore.add(target.url, directory, { mediaId: targetMedia.id, resourceId: resource.id, sourceName: sourceConfig?.name, filename });
     let associationWarning = "";
     if (deferGameAssociation) {
@@ -708,6 +721,7 @@ function metadataString(resource: ResourceItem, key: string): string {
 }
 
 function isAbsoluteWindowsPath(value: string): boolean {
+  if (isAndroidRuntime()) return value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") && !value.split("/").some((part) => part === ".." || part === ".");
   return /^(?:[A-Za-z]:[\\/]|\\\\)/.test(value.trim());
 }
 </script>

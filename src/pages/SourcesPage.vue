@@ -15,7 +15,7 @@ import type { PluginRecord } from "@/domain/plugin";
 import { validatePluginManifest } from "@/domain/plugin";
 import { loginCopyManga } from "@/infrastructure/sources/copymanga-login";
 import { DEFAULT_RESOURCE_SOURCE_CONFIGS } from "@/infrastructure/sources/default-sources";
-import { filterSourcesByType, getSourcePriority } from "@/infrastructure/sources/source-catalog";
+import { filterSourcesByType, getSourcePriority, sourcePlatformUnavailableReason } from "@/infrastructure/sources/source-catalog";
 import SourceGuide from "@/components/SourceGuide.vue";
 
 const store = useSourceConfigStore();
@@ -75,6 +75,8 @@ watch(type, (value) => {
 async function addPreset(preset: SourceConfig): Promise<void> {
   error.value = "";
   try {
+    const unavailable = sourcePlatformUnavailableReason(preset);
+    if (unavailable) throw new Error(unavailable);
     const timestamp = new Date().toISOString();
     await store.save({ ...preset, enabled: false, createdAt: timestamp, updatedAt: timestamp });
     saved.value = `${preset.name} 已添加，确认配置后再启用。`;
@@ -147,6 +149,8 @@ async function initializePage(): Promise<void> {
 async function addSource(): Promise<void> {
   error.value = "";
   saved.value = "";
+  const unavailable = sourcePlatformUnavailableReason(type.value);
+  if (unavailable) { error.value = unavailable; return; }
   const sourceName = name.value.trim();
   const sourceUrl = url.value.trim();
   if (!sourceName) {
@@ -200,6 +204,8 @@ async function addSource(): Promise<void> {
 
 async function toggle(config: SourceConfig): Promise<void> {
   try {
+    const unavailable = !config.enabled && sourcePlatformUnavailableReason(config);
+    if (unavailable) throw new Error(unavailable);
     await store.save({ ...config, enabled: !config.enabled, updatedAt: new Date().toISOString() });
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : "来源状态保存失败";
@@ -256,6 +262,8 @@ async function remove(config: SourceConfig): Promise<void> {
 }
 
 async function checkHealth(config: SourceConfig): Promise<void> {
+  const unavailable = sourcePlatformUnavailableReason(config);
+  if (unavailable) { error.value = unavailable; return; }
   healthBusyId.value = config.id;
   try {
     const result = await createSourceProvider(config).healthCheck();
@@ -416,19 +424,20 @@ function isHttpUrl(value: string): boolean {
   <section v-if="availablePresets.length" class="preset-grid" aria-label="可添加的来源">
     <article v-for="preset in availablePresets" :key="preset.id" class="card preset-card">
       <h3>{{ preset.name }}</h3><SourceGuide :config="preset" compact />
-      <button class="ghost-button" type="button" @click="addPreset(preset)">添加到来源</button>
+      <p v-if="sourcePlatformUnavailableReason(preset)" class="hint">{{ sourcePlatformUnavailableReason(preset) }}</p>
+      <button class="ghost-button" :disabled="!!sourcePlatformUnavailableReason(preset)" type="button" @click="addPreset(preset)">{{ sourcePlatformUnavailableReason(preset) ? '仅电脑端可用' : '添加到来源' }}</button>
     </article>
   </section>
 
   <section class="card">
     <form class="source-form" @submit.prevent="addSource">
       <label><span>来源名称</span><input v-model="name" type="text" placeholder="例如：我的更新源" required /></label>
-      <label><span>来源类型</span><select v-model="type"><option value="rss">RSS / Atom（附件 / 磁力 / 种子）</option><option value="public_video">B站公开投稿（MP4）</option><option value="lnovel">LNovel 中文轻小说</option><option value="mangadex">MangaDex 漫画</option><option value="mangabz">MangaBZ · 中文日漫</option><option value="archive">Internet Archive</option><option value="copymanga">拷贝漫画</option><option value="shinnku">真红小站 · 游戏文件</option><option value="shionlib">ShionLib · 游戏资源库</option><option value="kungal">鲲 Galgame</option><option value="vndb_release">VNDB 官方发行与试玩</option><option value="jmcomic">JMComic（需 Python）</option><option value="github_release">GitHub Releases</option></select></label>
+      <label><span>来源类型</span><select v-model="type"><option value="rss">RSS / Atom（附件 / 磁力 / 种子）</option><option value="public_video">B站公开投稿（MP4）</option><option value="lnovel">LNovel 中文轻小说</option><option value="mangadex">MangaDex 漫画</option><option value="mangabz">MangaBZ · 中文日漫</option><option value="archive">Internet Archive</option><option value="copymanga">拷贝漫画</option><option value="shinnku">真红小站 · 游戏文件</option><option value="shionlib">ShionLib · 游戏资源库</option><option value="kungal">鲲 Galgame</option><option value="vndb_release">VNDB 官方发行与试玩</option><option value="jmcomic" :disabled="!!sourcePlatformUnavailableReason('jmcomic')">JMComic（电脑端 Python）</option><option value="github_release">GitHub Releases</option></select></label>
       <label><span>{{ type === "mangabz" ? "MangaBZ 网站地址" : type === "public_video" ? "B站公开投稿来源地址" : type === "github_release" ? "GitHub 仓库地址" : type === "lnovel" ? "LNovel API 地址" : type === "mangadex" ? "MangaDex API 地址" : type === "archive" ? "Internet Archive 地址" : type === "copymanga" ? "拷贝漫画 API 地址" : type === "kungal" ? "鲲 Galgame 地址" : type === "shinnku" ? "真红小站地址" : type === "shionlib" ? "ShionLib 地址" : type === "vndb_release" ? "VNDB API 地址" : type === "jmcomic" ? "JMComic 地址" : "RSS/Atom 地址" }}</span><input v-model="url" type="url" :placeholder="type === 'mangabz' ? 'https://mangabz.com' : type === 'public_video' ? 'https://www.bilibili.com' : type === 'github_release' ? 'https://github.com/owner/repo' : type === 'lnovel' ? 'https://lnovel.animes.garden' : type === 'mangadex' ? 'https://api.mangadex.org' : type === 'archive' ? 'https://archive.org' : type === 'copymanga' ? 'https://mapi.hotmangasg.com' : type === 'kungal' ? 'https://www.kungal.com' : type === 'shinnku' ? 'https://www.shinnku.com' : type === 'shionlib' ? 'https://shionlib.com' : type === 'vndb_release' ? 'https://api.vndb.org/kana' : type === 'jmcomic' ? 'python://jmcomic' : 'https://example.com/feed.xml'" required /></label>
       <label v-if="type === 'copymanga'"><span>拷贝漫画 Token（可选）</span><input v-model="token" type="password" placeholder="公开章节无需填写；受限章节再粘贴 Token" autocomplete="off" /></label>
       <button class="primary-button" type="submit">添加来源</button>
     </form>
-    <p class="hint">RSS 可用于动漫更新；B站公开投稿支持关键词或 BV 链接，只读取可匿名访问的内容。下载使用已配置引擎。漫画 CBZ / 小说 TXT 仅在桌面端生成。拷贝漫画只保存登录返回的 Token，不保存密码，也不会向其它 API 地址自动转发 Token。</p>
+    <p class="hint">RSS 可用于动漫更新；B站公开投稿支持关键词或 BV 链接，只读取可匿名访问的内容。下载使用已配置引擎。漫画 CBZ / 小说 TXT 可在应用内下载与阅读；JMComic 的 Python 桥接仅用于电脑端。拷贝漫画只保存登录返回的 Token，不保存密码，也不会向其它 API 地址自动转发 Token。</p>
     <p v-if="error || store.error" class="error-message">{{ error || store.error }}</p>
     <p v-if="saved" class="success-message">{{ saved }}</p>
   </section>
@@ -445,6 +454,7 @@ function isHttpUrl(value: string): boolean {
           <div class="media-title-line"><h3>{{ config.name }}</h3><span class="tag-pill">{{ sourceTypeLabel(config.type as string) }}</span></div>
           <p class="muted source-url">{{ config.url }}</p>
           <SourceGuide :config="config" />
+          <p v-if="sourcePlatformUnavailableReason(config)" class="hint" role="status">{{ sourcePlatformUnavailableReason(config) }}</p>
           <p v-if="health[config.id]?.message" class="hint" :class="{ 'error-text': !health[config.id]?.ok }">{{ health[config.id]?.message }}</p>
           <p v-if="health[config.id]?.checkedAt" class="source-check-time">上次连接检测：{{ health[config.id]?.checkedAt }}</p>
           <p v-if="latestSourceIssue(config)" class="hint error-text" role="status">最近失败：{{ latestSourceIssue(config)?.message }} · {{ latestSourceIssue(config)?.checkedAt }}</p>
@@ -461,9 +471,9 @@ function isHttpUrl(value: string): boolean {
         <div class="task-actions">
           <span class="state-pill" :class="{ enabled: config.enabled }">{{ config.enabled ? "已启用" : "已停用" }}</span>
           <span class="state-pill" :class="{ enabled: health[config.id]?.ok && !latestSourceIssue(config) }">状态：{{ healthLabel(config) }}</span>
-          <button class="small-button" :disabled="!!healthBusyId" type="button" @click="checkHealth(config)">{{ healthBusyId === config.id ? "检测中…" : "检查连接" }}</button>
+          <button class="small-button" :disabled="!!healthBusyId || !!sourcePlatformUnavailableReason(config)" type="button" @click="checkHealth(config)">{{ healthBusyId === config.id ? "检测中…" : "检查连接" }}</button>
           <button class="small-button" type="button" @click="editSource(config)">编辑</button>
-          <button class="small-button" type="button" @click="toggle(config)">{{ config.enabled ? "停用" : "启用" }}</button>
+          <button class="small-button" :disabled="!config.enabled && !!sourcePlatformUnavailableReason(config)" type="button" @click="toggle(config)">{{ config.enabled ? "停用" : "启用" }}</button>
           <button class="small-button danger" type="button" @click="remove(config)">移除</button>
         </div>
       </article>

@@ -28,8 +28,9 @@ function comparablePath(path: string): ComparablePath | undefined {
   return;
 }
 
-function output(path: string, roots: readonly string[]): DownloadOutput | undefined {
-  if (!SUPPORTED.test(path.trim())) return;
+function output(path: string, roots: readonly string[], mediaOnly = true): DownloadOutput | undefined {
+  if (mediaOnly && !SUPPORTED.test(path.trim())) return;
+  if (!mediaOnly && (path.split(/[\\/]/).some((part) => part.startsWith(".")) || /\.(?:part|tmp)$/i.test(path.trim()))) return;
   const candidate = comparablePath(path);
   if (!candidate) return;
   const root = roots.find((value) => {
@@ -47,14 +48,23 @@ function output(path: string, roots: readonly string[]): DownloadOutput | undefi
  * root; an arbitrary parent directory is never promoted to an allowed root.
  */
 export function getCompletedDownloadOutputs(task: DownloadTask, configuredRoots: readonly string[] = []): DownloadOutput[] {
+  return completedFiles(task, configuredRoots, true);
+}
+
+/** Explicit export choices; native sharing rechecks the private file and its boundary. */
+export function getCompletedDownloadFiles(task: DownloadTask, configuredRoots: readonly string[] = []): DownloadOutput[] {
+  return completedFiles(task, configuredRoots, false);
+}
+
+function completedFiles(task: DownloadTask, configuredRoots: readonly string[], mediaOnly: boolean): DownloadOutput[] {
   if (task.state !== "completed") return [];
   if (task.finalPath) {
-    const final = output(task.finalPath, [task.directory, ...configuredRoots]);
+    const final = output(task.finalPath, [task.directory, ...configuredRoots], mediaOnly);
     return final ? [final] : [];
   }
   const seen = new Set<string>();
   return task.files.flatMap((path) => {
-    const item = output(path, [task.directory]);
+    const item = output(path, [task.directory], mediaOnly);
     const key = item ? comparablePath(item.path)!.value : "";
     if (!item || seen.has(key)) return [];
     seen.add(key);

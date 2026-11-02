@@ -1,23 +1,25 @@
 # ACGN Hub
 
-为喜欢的故事留一个位置。面向 Windows 的动画、漫画、轻小说与 Galgame 收藏工作台，将作品发现、资源检索、下载整理和离线阅读放在一起。
+为喜欢的故事留一个位置。面向 Windows 与 Android 的动画、漫画、轻小说与 Galgame 收藏工作台，将作品发现、资源检索、下载整理和离线阅读放在一起。
 
-**[下载 Windows 版本](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [0.4.0 使用指南](docs/releases/v0.4.0-usage.md) · [English](README.en.md)
+**[下载已发布版本](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [0.5.0 使用指南](docs/releases/v0.5.0-usage.md) · [English](README.en.md)
+
+**0.5.0 的 Windows EXE、便携包与 Android APK 已完成本地打包和原生样本验证，待 GitHub 附件上传回验。** Android 已实际完成 HTTP 暂停续传、重启恢复、小说下载与内置阅读。正式下载以上方 Releases 为准，验证范围见[0.5.0 使用指南](docs/releases/v0.5.0-usage.md)。
 
 ## 发现、收藏，再慢慢看
 
 - **跟随季度的番剧首页**：按本地年月切换 1 / 4 / 7 / 10 月新番，支持往季、放送表与分页。漫画、轻小说和 Galgame 也有独立封面书架。
 - **作品与作者一起搜**：输入作品名或作者名，直接查看相关作品。Bangumi 与 VNDB 提供作品资料；资源检索可以独立使用。
 - **清楚的资源选择**：显示来源、语言、平台、版本与获取方式，区分本体、补丁、试玩、原声、网页入口和文件直链。
-- **下载与整理**：内置 aria2 处理 HTTP / HTTPS、磁力和 Torrent；支持暂停、续传、限速、完成后命名及按作品整理。qBittorrent 可选。
+- **下载与整理**：Windows 内置 aria2 处理 HTTP / HTTPS、磁力和 Torrent，qBittorrent 可选。Android 使用独立的前台 HTTP 下载引擎，漫画与小说沿用 CBZ / TXT 下载流程。两端按各自支持的资源类型提供操作。
 - **下载后在应用内看**：CBZ 漫画支持长条滚动、单页与全屏；TXT 小说支持目录、字号、行距和纸色；保存进度，并可接续同作品已下载的下一话、卷或集。
-- **带着收藏搬家**：便携包将资料保存在自己的 `Data` 中。关闭程序后移动完整目录，内部已登记路径和阅读进度随新位置更新。
+- **带着收藏搬家**：Windows 便携包将资料保存在自己的 `Data` 中。关闭程序后移动完整目录，内部已登记路径和阅读进度随新位置更新。Android 使用应用私有目录，两个平台的资料库独立保存。
 
 暖粉紫电视图标与真实作品封面贯穿界面；没有生成的 AI 角色素材。
 
 ## 界面预览
 
-以下四图为 v0.3.9 正式桌面程序的真实界面，使用独立资料库及公开作品资料。0.4.0 延续这一视觉方向。
+以下四图为 v0.3.9 正式桌面程序的真实界面，使用独立资料库及公开作品资料。后续版本延续这一视觉方向；这些图片不代表 Android 实机验收。
 
 | 动画 · 季度发现 | 漫画 · 封面书架 |
 | --- | --- |
@@ -25,11 +27,17 @@
 | 轻小说 · 作品发现 | Galgame · 作品发现 |
 | ![轻小说发现页](docs/screenshots/03-novel.png) | ![Galgame 发现页](docs/screenshots/04-galgame.png) |
 
+下方为最终 v0.5.0 APK 在独立 **Android API 35 模拟器**中的真实截图，使用公开作品资料及隔离资料库。
+
+| Android · 轻小说书架 | Android · 内置阅读 |
+| --- | --- |
+| <img src="docs/screenshots/05-android-novel-shelf.png" alt="Android 轻小说书架" width="280"> | <img src="docs/screenshots/06-android-reader.png" alt="Android 小说内置阅读器" width="280"> |
+
 ## 下载与首次启动
 
 在 [Releases](https://github.com/CidneyAurum/ACGN-Hub/releases/latest) 下载 **Windows x64 便携 ZIP**，完整解压到可写目录后运行 `START-PORTABLE.cmd`。便携目录中的 EXE 也会通过 `ACGN-HUB-PORTABLE` 标记使用同一个 `Data`。不要从压缩包预览窗口直接运行，也不要只取走 EXE。
 
-需要 Microsoft Edge WebView2 Runtime；普通使用无需安装 Node.js、Rust 或独立 aria2。NSIS 安装包作为另一种分发方式提供。当前发布目标为 Windows x64。
+需要 Microsoft Edge WebView2 Runtime；普通使用无需安装 Node.js、Rust 或独立 aria2。NSIS 安装包作为另一种分发方式提供。Windows 发布架构为 x64。
 
 首次使用只需三步：
 
@@ -37,7 +45,24 @@
 2. 到「来源管理」启用需要的来源；预置下载来源默认关闭。
 3. 从发现页打开作品，或在「找资源」直接搜索，再选择准确的作品版本和章节。
 
-普通直链和 BT 下载使用内置引擎。JMComic、公开投稿等可选功能需要相应本机工具，详情见[使用指南](docs/releases/v0.4.0-usage.md)。发行包不含账号、用户资料或作品文件。
+Windows 普通直链和 BT 下载使用内置引擎。JMComic、公开投稿等可选功能需要相应本机工具，详情见[使用指南](docs/releases/v0.5.0-usage.md)。发行包不含账号、用户资料或作品文件。
+
+## 0.5.0：同一套书架，适配电脑与手机
+
+Android APK 包含 **arm64-v8a 与 x86_64**，最低为 **Android 8.0 / API 26**。安装后通过底部导航进入书架、资源和下载；更多工具从菜单打开。漫画支持触屏翻页及横竖屏阅读，完成的文件可调用系统「导出 / 分享」选择器。
+
+| 能力 | Windows x64 | Android |
+| --- | --- | --- |
+| 作品发现、搜索、收藏 | 支持 | 支持 |
+| 普通 HTTP 文件下载 | 内置 aria2 | 原生前台引擎，已实测暂停 / 续传与重启恢复 |
+| 漫画 CBZ、小说 TXT 下载与内置阅读 | 支持 | 支持，触屏翻页与阅读进度保留 |
+| 磁力、Torrent、qBittorrent | 支持 | 不支持，操作入口提示需电脑版 |
+| Python / JMComic / 公开投稿工具 | 需要相应本机工具 | 不支持 |
+| Galgame 资源检索与文件下载 | 按来源获取 | 检索及普通 HTTP 归档下载 |
+| Windows 游戏扫描、启动及存档工具 | 支持相应本地工具流程 | 不支持 |
+| 便携目录迁移 | 完整 `Data` 随目录搬迁 | 应用私有目录，不使用 Windows 便携模式 |
+
+Android 下载要求应用保持运行。原生 HTTP 任务保存断点，重启后恢复为暂停；续传取决于服务器支持。当前没有系统后台下载服务，不承诺锁屏或后台持续传输。CBZ / TXT 可在应用内阅读；本地视频播放取决于 Android WebView 及系统编码。两个平台的资料库独立保存，暂不自动同步。具体已验证样本与设备范围见[构建和验证记录](docs/research/android-v050.md)。
 
 ## 0.4.0：补齐轻小说与 Galgame，改善便携使用
 
@@ -45,7 +70,7 @@
 
 轻小说首页先显示首批 8 部真实推荐，再补齐本页 24 部；已有缓存过期也会先显示并后台更新。后续请求失败时保留已有结果，可用「补全本页」继续加载。
 
-LNovel 缓存漏掉正篇时，会补查官方月 / 周索引。《无职转生》正篇 2013 与蛇足篇 4325 现分别展示；当前正篇详情返回 HTTP 408、首章已下架，本轮未取得完整卷，不承诺当前可下载。见[正篇核查记录](docs/research/lnovel-main-series-v040.md)。
+LNovel 缓存漏掉正篇时，会补查官方月 / 周索引。《无职转生》正篇 2013 与蛇足篇 4325 分别展示；0.4.0 核查时正篇详情返回 HTTP 408、首章已下架，未取得完整卷，不能据此承诺当前可下载。见[正篇核查记录](docs/research/lnovel-main-series-v040.md)。
 
 Galgame 扩展真红小站原文合集文件目录，保留中文 Windows 版本优先；改善 KUN、ShionLib 与官方发行入口的作品匹配、分页及取消处理。资源语言依据来源信息标记，原文合集不会自动当作中文版。
 
@@ -71,7 +96,7 @@ Galgame 扩展真红小站原文合集文件目录，保留中文 Windows 版本
 
 ```text
 ACGN-Hub/
-├─ ACGN-Hub-0.4.0.exe
+├─ ACGN-Hub-<版本>.exe
 ├─ START-PORTABLE.cmd
 ├─ ACGN-HUB-PORTABLE
 └─ Data/                       首次启动后创建
@@ -88,14 +113,14 @@ ACGN-Hub/
 
 ## 开发
 
-前端使用 Vue 3、TypeScript、Vite；桌面端使用 Tauri 2、Rust、SQLite。使用支持当前 Vite 版本的 Node.js LTS。Windows 桌面构建另需 Rust MSVC 工具链、Visual Studio C++ Build Tools 与 Windows SDK。
+前端使用 Vue 3、TypeScript、Vite；原生端使用 Tauri 2、Rust、SQLite，Android 封装使用 Gradle / Kotlin。使用支持当前 Vite 版本的 Node.js LTS。Windows 桌面构建另需 Rust MSVC 工具链、Visual Studio C++ Build Tools 与 Windows SDK。
 
 ```powershell
 npm ci
 npm run dev
 ```
 
-浏览器开发模式用于界面预览；原生下载、目录选择和本地阅读文件访问需要桌面端。
+浏览器开发模式用于界面预览；原生下载和本地文件访问需要对应平台的原生程序。
 
 ```powershell
 npm run verify
@@ -111,13 +136,24 @@ powershell -NoProfile -File .\src-tauri\scripts\build-desktop.ps1 -Action bundle
 
 构建脚本会检查前端、Cargo 与 Tauri 版本是否一致，并加载本机 MSVC / SDK。正式包装脚本额外要求匹配的静态扫描证据；`release/`、`.work/`、用户数据库与媒体不上传 Git。
 
+Android 构建另需 JDK 17、Android SDK / NDK 与对应 Rust 目标。Windows 主机构建仍需上述 MSVC 工具。设置 `JAVA_HOME`、`ANDROID_HOME` 与 `NDK_HOME` 后运行：
+
+```powershell
+powershell -NoProfile -File .\src-tauri\scripts\build-android.ps1 -Action info
+powershell -NoProfile -File .\src-tauri\scripts\build-android.ps1 -Action build
+```
+
+默认构建 arm64 与 x86_64，使用校验后复制原生库的方式封装，无需为此改变 Windows 符号链接权限。正式安装包仍需签名；工具版本与签名步骤见[0.5.0 指南](docs/releases/v0.5.0-usage.md#开发构建)。私钥、口令、用户数据和构建缓存不进入仓库。
+
 ## 验证与文档
 
-单元测试与固定响应浏览器测试用于防止代码、路径和交互回归；真实来源与桌面样本的验证范围单独记录。尚未完成完整 Galgame 下载、安装和运行验收，也未验证其它桌面平台。视频编码支持取决于系统，EPUB / PDF 仍使用系统阅读器。
+源码回归通过 **670 项前端单测、91 项完整浏览器交互、109 项 Rust 测试**，另 2 项 Rust 默认忽略。最终 Windows 程序实际读取 TXT / CBZ 并恢复阅读位置；最终 Android APK 实测 HTTP 暂停、结束进程后的冷启动续传、TXT 完整下载与内读、同作品卷间切换，以及旧漫画页码恢复。漫画触屏与 TXT / CBZ 选择器另有阶段样本。原用户数据库 9 表、3 个媒体和 22 个旧程序复核保持。具体文件身份、API 35 模拟器与未覆盖范围见[验证记录](VERIFICATION.md)。完整 Galgame 下载、安装及运行尚未验收；EPUB / PDF 不使用内置阅读器。
 
 | 文档 | 内容 |
 | --- | --- |
-| [0.4.0 使用指南](docs/releases/v0.4.0-usage.md) | 首次启动、来源选择、阅读、便携升级与常见问题 |
+| [0.5.0 使用指南](docs/releases/v0.5.0-usage.md) | Windows / Android 安装、下载、手机存储、阅读与开发构建 |
+| [Android 构建与验证](docs/research/android-v050.md) | 双架构 APK 身份、签名、实际设备样本与验证边界 |
+| [0.4.0 使用指南](docs/releases/v0.4.0-usage.md) | 已发布 Windows 版本的首次启动、来源选择、阅读与便携升级 |
 | [验证记录](VERIFICATION.md) | 各版本实际测试与未覆盖边界 |
 | [历史 README](HISTORY.md) | 原 README 完整存档，保留历史交付叙述与当时路径 |
 | [本地阅读研究](docs/research/local-reader-references-v036.md) | 阅读交互参考与实现范围 |

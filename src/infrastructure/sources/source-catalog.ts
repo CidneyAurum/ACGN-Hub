@@ -1,5 +1,6 @@
 import type { MediaType } from "@/domain/media";
 import type { SourceConfig } from "@/domain/source";
+import { isAndroidRuntime } from "@/shared/runtime";
 
 export interface SourceCapability {
   label: string;
@@ -66,6 +67,18 @@ export function sourceSupportsType(config: SourceConfig, type: MediaType): boole
   return getSourceCapability(config).supportedTypes.includes(type);
 }
 
+/** Runtime limitations affect selectable adapters, never saved configuration. */
+export function sourcePlatformUnavailableReason(configOrType: SourceConfig | string, android = isAndroidRuntime()): string | undefined {
+  const type = typeof configOrType === "string" ? configOrType : configOrType.type;
+  if (android && type === "jmcomic") return "JMComic 需要电脑端 Python 桥接，安卓端无法检索或下载；已有配置已保留。";
+  if (android && type === "public_video") return "B站公开投稿解析与下载需要电脑版 Python / yt-dlp，安卓端暂不支持；可在浏览器访问官网，已有配置已保留。";
+  return undefined;
+}
+
+export function filterSourcesForPlatform(configs: readonly SourceConfig[], android = isAndroidRuntime()): SourceConfig[] {
+  return configs.filter((config) => !sourcePlatformUnavailableReason(config, android));
+}
+
 /** Filter the view only; retain every custom/unsupported configuration in All. */
 export function filterSourcesByType(configs: readonly SourceConfig[], type?: MediaType): SourceConfig[] {
   return configs.filter((config) => type === undefined || sourceSupportsType(config, type));
@@ -80,15 +93,15 @@ export function getSourcePriority(config: SourceConfig, mediaType?: MediaType): 
   return priorities[config.type] ?? 1000;
 }
 
-export function getSourceUsage(config: SourceConfig): SourceUsage {
+export function getSourceUsage(config: SourceConfig, android = isAndroidRuntime()): SourceUsage {
   const capability = getSourceCapability(config);
-  const requirements = capability.requiresDesktop ? ["桌面端"] : [];
+  const feed = rssKind(config);
+  const requirements = capability.requiresDesktop ? [android && capability.setup !== "python" ? feed ? "可检索；磁力与种子下载需电脑版" : ["manga", "novel"].includes(capability.mode) ? "应用内下载与阅读" : "应用内下载" : "桌面端"] : [];
   if (capability.setup === "python") requirements.push(config.type === "public_video" ? "Python · yt-dlp · FFmpeg" : "Python · jmcomic");
   if (config.type === "copymanga") requirements.push(config.token?.trim() ? "Token已保存，权限需原站验证" : "公开章节无需Token，受限时再登录");
   if (config.type === "kungal") requirements.push("公开检索无需账号；部分外链需原站登录或访问权限");
   const common = { requirements, description: capability.description };
-  const feed = rssKind(config);
-  if (feed) return { ...common, tier: feed === "custom" ? "custom" : "primary", label: feed === "custom" ? "自定义订阅" : "动画主源", format: feed === "custom" ? "附件 / 磁力 / Torrent" : "磁力 / Torrent", language: feed === "custom" ? "语言由订阅内容决定" : "字幕组发布 · 核对字幕语言" };
+  if (feed) return { ...common, ...(android ? { description: "安卓端可读取订阅并检索资源；仅 HTTP/HTTPS 文件直链可在应用内下载，磁力和种子请使用电脑版。" } : {}), tier: feed === "custom" ? "custom" : "primary", label: feed === "custom" ? "自定义订阅" : "动画主源", format: feed === "custom" ? "附件 / 磁力 / Torrent" : "磁力 / Torrent", language: feed === "custom" ? "语言由订阅内容决定" : "字幕组发布 · 核对字幕语言" };
   switch (config.type) {
     case "shinnku": return { ...common, tier: "primary", label: "游戏文件", format: "HTTP 游戏归档", language: "中文目录优先 · 版本依原站标注" };
     case "shionlib": return { ...common, tier: "index", label: "多版本资源库", format: "完整资源页 · 原站验证", language: "汉化版本 / 语言 / 平台可选" };

@@ -77,6 +77,8 @@ export interface DownloadTask extends DownloadDiagnostics {
 export interface DownloadStatus extends DownloadDiagnostics {
   engineTaskId?: string;
   filename?: string;
+  /** Native mobile downloads return the checked canonical output directory. */
+  directory?: string;
   state: DownloadState;
   totalBytes: number;
   completedBytes: number;

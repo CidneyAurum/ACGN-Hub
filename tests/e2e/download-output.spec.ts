@@ -20,12 +20,12 @@ async function simulateOpen(page: Page, callback: (request: OpenRequest) => Prom
     const response = await route.fetch();
     const source = await response.text();
     const invokeImport = /import\s*\{\s*invoke\s*\}\s*from\s*["'][^"']+["'];?/;
-    const runtimeImport = /import\s*\{\s*isTauriRuntime\s*\}\s*from\s*["'][^"']+["'];?/;
+    const runtimeImport = /import\s*\{[^}]*\bisTauriRuntime\b[^}]*\}\s*from\s*["'][^"']+["'];?/;
     if (!invokeImport.test(source) || !runtimeImport.test(source)) throw new Error("DownloadsPage native boundary import changed");
     await route.fulfill({ response, body: source.replace(invokeImport, `const invoke = (command, args) => {
       if (command !== "open_downloaded_media") throw new Error("Unexpected native command: " + command);
       return window.__e2eOpenCompletedOutput(args);
-    };`).replace(runtimeImport, "const isTauriRuntime = () => true;") });
+    };`).replace(runtimeImport, "const isTauriRuntime = () => true; const isAndroidRuntime = () => false;") });
   });
 }
 

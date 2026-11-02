@@ -96,6 +96,9 @@ pub async fn qbittorrent_request(
     username: Option<String>,
     password: Option<String>,
 ) -> Result<Response, String> {
+    if cfg!(mobile) {
+        return Err("qBittorrent 本机服务仅适用于桌面端；安卓端不连接 Windows 回环服务".into());
+    }
     let method = method.to_ascii_uppercase();
     let url = request_url(&endpoint, &path, &method)?;
     if body.as_ref().is_some_and(|body| body.len() > 128 * 1024) {

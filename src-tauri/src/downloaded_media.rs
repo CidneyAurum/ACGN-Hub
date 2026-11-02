@@ -39,6 +39,9 @@ pub async fn open_downloaded_media(
     allowed_root: String,
     prefer_system: Option<bool>,
 ) -> Result<(), String> {
+    if cfg!(mobile) {
+        return Err("安卓应用私有文件请使用内置阅读器或播放器打开；暂不向其他应用共享私有路径".into());
+    }
     let cache_handle = app.clone();
     let path = crate::run_blocking(move || {
         let checked = validated_media(&path, &allowed_root)?;

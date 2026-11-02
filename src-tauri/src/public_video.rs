@@ -270,6 +270,9 @@ fn execute_bridge(
 
 #[tauri::command]
 pub async fn inspect_public_video(url: String) -> Result<Value, String> {
+    if cfg!(mobile) {
+        return Err("公开视频解析依赖桌面 Python/yt-dlp，安卓端暂不支持此来源".into());
+    }
     let url = validated_url(&url)?;
     crate::run_blocking(move || {
         let deadline = Instant::now() + Duration::from_secs(45);
@@ -295,6 +298,9 @@ pub async fn download_public_video(
     output_path: String,
     operation_id: String,
 ) -> Result<Value, String> {
+    if cfg!(mobile) {
+        return Err("公开视频下载依赖桌面 Python/ffmpeg，安卓端暂不支持此来源".into());
+    }
     let url = validated_url(&url)?;
     let operation = OperationGuard::register(operation_id)?;
     crate::run_blocking(move || {

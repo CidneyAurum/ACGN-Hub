@@ -67,7 +67,7 @@ async function simulateViewer(page: Page): Promise<ViewerSimulation> {
     const response = await route.fetch();
     const source = await response.text();
     const nativeImport = /import\s*\{\s*convertFileSrc\s*,\s*invoke\s*\}\s*from\s*["'][^"']+["'];?/;
-    const runtimeImport = /import\s*\{\s*isTauriRuntime\s*\}\s*from\s*["'][^"']+["'];?/;
+    const runtimeImport = /import\s*\{[^}]*\bisTauriRuntime\b[^}]*\}\s*from\s*["'][^"']+["'];?/;
     if (!nativeImport.test(source) || !runtimeImport.test(source)) throw new Error("Local viewer native boundary import changed");
     await route.fulfill({ response, body: source.replace(nativeImport, `
       const invoke = (command, args) => window.__e2eLocalViewerCommand(command, args);
@@ -77,15 +77,15 @@ async function simulateViewer(page: Page): Promise<ViewerSimulation> {
         // encoded, so passing protocol routing slashes here must fail the exact
         // fixture path matcher rather than being silently repaired by the mock.
         return new URL("/__e2e-local-viewer/" + encodeURIComponent(path), location.origin).href;
-      };`).replace(runtimeImport, "const isTauriRuntime = () => true;") });
+      };`).replace(runtimeImport, "const isTauriRuntime = () => true; const isAndroidRuntime = () => false;") });
   });
   await page.route(/\/src\/pages\/DownloadsPage\.vue(?:\?.*)?$/, async (route) => {
     if (new URL(route.request().url()).searchParams.has("vue")) return route.continue();
     const response = await route.fetch();
     const source = await response.text();
-    const runtimeImport = /import\s*\{\s*isTauriRuntime\s*\}\s*from\s*["'][^"']+["'];?/;
+    const runtimeImport = /import\s*\{[^}]*\bisTauriRuntime\b[^}]*\}\s*from\s*["'][^"']+["'];?/;
     if (!runtimeImport.test(source)) throw new Error("DownloadsPage desktop boundary import changed");
-    await route.fulfill({ response, body: source.replace(runtimeImport, "const isTauriRuntime = () => true;") });
+    await route.fulfill({ response, body: source.replace(runtimeImport, "const isTauriRuntime = () => true; const isAndroidRuntime = () => false;") });
   });
   await page.route("**/__e2e-local-viewer/**", async (route) => {
     const url = new URL(route.request().url());
@@ -144,6 +144,44 @@ async function waitDownloadReady(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { name: "下载中心", exact: true })).toBeVisible();
   await expect(page.locator("article.task-row").first()).toBeVisible();
 }
+
+test("phone comic swipes distinguish vertical reading and support WebView immersive fallback", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const saved = localTask("phone-comic", "manga", "固定漫画 - 第01话.cbz");
+  await simulateViewer(page);
+  await seedTasks(page, [saved]);
+  await page.goto("/#/viewer/local/phone-comic");
+  await chooseSinglePageMode(page);
+  await expectComicPage(page, 1);
+  await page.evaluate(() => { Object.defineProperty(HTMLElement.prototype, "requestFullscreen", { configurable: true, value: undefined }); });
+  await page.getByRole("button", { name: "全屏观看", exact: true }).click();
+  await expect(page.locator(".viewer-surface")).toHaveClass(/is-immersive/);
+  await expect(page.getByRole("button", { name: "退出全屏", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "下一页 →", exact: true })).toBeInViewport();
+  const stage = page.locator('[aria-label="漫画阅读区域"]');
+  const swipe = async (x: number, y: number) => stage.evaluate((element, delta) => {
+    const rect = element.getBoundingClientRect();
+    const origin = { identifier: 1, target: element, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 };
+    const start = new Touch(origin);
+    element.dispatchEvent(new TouchEvent("touchstart", { touches: [start], changedTouches: [start], bubbles: true }));
+    const end = new Touch({ ...origin, clientX: origin.clientX + delta.x, clientY: origin.clientY + delta.y });
+    element.dispatchEvent(new TouchEvent("touchend", { touches: [], changedTouches: [end], bubbles: true }));
+  }, { x, y });
+  await swipe(-15, -100);
+  await expectComicPage(page, 1);
+  await swipe(-100, 10);
+  await expectComicPage(page, 2);
+  await swipe(100, -5);
+  await expectComicPage(page, 1);
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(page.getByRole("button", { name: "退出全屏", exact: true })).toBeInViewport();
+  await expect(page.getByRole("button", { name: "下一页 →", exact: true })).toBeInViewport();
+  const stageBounds = await stage.boundingBox();
+  expect(stageBounds!.height).toBeGreaterThan(80);
+  await page.getByRole("button", { name: "退出全屏", exact: true }).click();
+  await expect(page.locator(".viewer-surface")).not.toHaveClass(/is-immersive/);
+  await expect(page.getByRole("navigation", { name: "手机主导航", exact: true })).toBeVisible();
+});
 
 test("completed CBZ opens inside the app, turns pages and restores the last successfully read page", async ({ page }) => {
   const saved = localTask("comic-completed", "manga", "固定漫画 - 第01话.cbz");
@@ -343,6 +381,64 @@ test("fullscreen keeps mouse page controls, page jumps and exit inside the activ
   await expect(page.locator(":fullscreen")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "全屏观看", exact: true })).toBeVisible();
 });
+
+for (const mode of ["native", "webview-fallback"] as const) {
+  test(`fullscreen survives loading the next novel volume and exits cleanly (${mode})`, async ({ page }) => {
+    if (mode === "webview-fallback") await page.setViewportSize({ width: 390, height: 844 });
+    const first = localTask("fullscreen-novel-1", "novel", "星海物语 - 第1卷.txt", {
+      reading: { mediaId: "fullscreen-novel", seriesTitle: "星海物语", unitTitle: "第1卷", unitNumber: 1 },
+    });
+    const second = localTask("fullscreen-novel-2", "novel", "星海物语 - 第2卷.txt", {
+      reading: { mediaId: "fullscreen-novel", seriesTitle: "星海物语", unitTitle: "第2卷", unitNumber: 2 },
+    });
+    let finishPreparation!: () => void;
+    const preparing = new Promise<void>((resolve) => { finishPreparation = resolve; });
+    const simulation = await simulateViewer(page);
+    simulation.prepare = async (request) => {
+      const next = request.path === second.outputPath;
+      if (next) await preparing;
+      return { sessionId: next ? chapterTwoSessionId : chapterOneSessionId, kind: "text", title: next ? second.title : first.title,
+        sizeBytes: 1000, modifiedAt, text: `第一章\n${next ? "第二卷正文" : "第一卷正文"}\n${"这是小说正文。".repeat(120)}` };
+    };
+    await seedTasks(page, [first, second]);
+    await page.goto("/#/viewer/local/fullscreen-novel-1");
+    await expect(page.getByRole("article", { name: "小说正文", exact: true })).toContainText("第一卷正文");
+    if (mode === "webview-fallback") await page.evaluate(() => {
+      Object.defineProperty(HTMLElement.prototype, "requestFullscreen", { configurable: true, value: undefined });
+    });
+    await page.getByRole("button", { name: "全屏观看", exact: true }).click();
+    const reader = page.locator(".viewer-surface");
+    const fullscreen = page.locator(mode === "native" ? ".viewer-surface:fullscreen" : ".viewer-surface.is-immersive");
+    await expect(fullscreen).toBeVisible();
+    const originalSurface = await reader.elementHandle();
+    await reader.getByRole("button", { name: "下一话 / 卷", exact: true }).click();
+    await expect(page).toHaveURL(/#\/viewer\/local\/fullscreen-novel-2$/);
+    await expect(reader).toHaveAttribute("aria-busy", "true");
+    await expect(reader.getByRole("status")).toContainText("正在打开你的本地文件");
+    await expect(fullscreen).toBeVisible();
+    await expect(reader.getByRole("button", { name: "退出全屏", exact: true })).toBeInViewport();
+    finishPreparation();
+    await expect(reader.getByRole("article", { name: "小说正文", exact: true })).toContainText("第二卷正文");
+    await expect(reader).toHaveAttribute("aria-busy", "false");
+    expect(await originalSurface!.evaluate((element) => element.isConnected && element === document.querySelector(".viewer-surface"))).toBe(true);
+    await expect(fullscreen).toBeVisible();
+    await reader.getByRole("button", { name: "退出全屏", exact: true }).click();
+    await expect(fullscreen).toHaveCount(0);
+    await expect(reader.getByRole("button", { name: "全屏观看", exact: true })).toBeVisible();
+    await expect(page.locator("body")).not.toHaveClass(/viewer-immersive/);
+    // OS/browser exit and the fallback Escape path must update the label too.
+    await reader.getByRole("button", { name: "全屏观看", exact: true }).click();
+    await expect(fullscreen).toBeVisible();
+    if (mode === "native") await page.evaluate(() => document.exitFullscreen());
+    else await page.keyboard.press("Escape");
+    await expect(fullscreen).toHaveCount(0);
+    await expect(reader.getByRole("button", { name: "全屏观看", exact: true })).toBeVisible();
+    await expect(page.locator("body")).not.toHaveClass(/viewer-immersive/);
+    await page.getByRole("link", { name: "← 返回下载", exact: true }).click();
+    await waitDownloadReady(page);
+    await expect.poll(() => [...simulation.closed].sort()).toEqual([chapterOneSessionId, chapterTwoSessionId].sort());
+  });
+}
 
 test("continuous reading loads nearby pages on scroll, restores progress and switches back to single pages", async ({ page }) => {
   const saved = localTask("continuous-comic", "manga", "固定漫画 - 第01话.cbz");

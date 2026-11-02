@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import MediaPoster from "@/components/MediaPoster.vue";
 import SourceGuide from "@/components/SourceGuide.vue";
 import { searchSourceCandidates, type SourceCandidate, type SourceFailure } from "@/application/resource-discovery";
-import { getSourcePriority, sourceSupportsType } from "@/infrastructure/sources/source-catalog";
+import { filterSourcesForPlatform, getSourcePriority, sourcePlatformUnavailableReason, sourceSupportsType } from "@/infrastructure/sources/source-catalog";
 import { useSourceConfigStore } from "@/stores/source-config";
 import { useMediaLibraryStore } from "@/stores/media-library";
 import { useSearchSessionStore } from "@/stores/search-session";
 import type { Media, MediaType } from "@/domain/media";
-import { isTauriRuntime } from "@/shared/runtime";
+import { isAndroidRuntime, isTauriRuntime } from "@/shared/runtime";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { DEFAULT_RESOURCE_SOURCE_CONFIGS } from "@/infrastructure/sources/default-sources";
 
@@ -36,10 +36,12 @@ const types: Array<{ value: MediaType; label: string }> = [
   { value: "anime", label: "动画" }, { value: "manga", label: "漫画" },
   { value: "novel", label: "小说" }, { value: "visual_novel", label: "Galgame" },
 ];
-const compatibleSources = computed(() => [...sources.configs, ...DEFAULT_RESOURCE_SOURCE_CONFIGS.filter((preset) =>
+const categorySources = computed(() => [...sources.configs, ...DEFAULT_RESOURCE_SOURCE_CONFIGS.filter((preset) =>
   (preset.type === "vndb_release" || sourceSupportsType(preset, "visual_novel") && preset.type !== "rss" || preset.type === "lnovel") &&
   !sources.configs.some((config) => config.id === preset.id || config.type === preset.type && config.url.replace(/\/+$/, "") === preset.url.replace(/\/+$/, "")))].filter((config) => sourceSupportsType(config, type.value))
   .sort((left, right) => Number(right.enabled) - Number(left.enabled) || getSourcePriority(left, type.value) - getSourcePriority(right, type.value)));
+const compatibleSources = computed(() => filterSourcesForPlatform(categorySources.value));
+const unavailableSources = computed(() => categorySources.value.filter((source) => sourcePlatformUnavailableReason(source)));
 const selectedSource = computed(() => compatibleSources.value.find((source) => source.id === selectedSourceId.value));
 const enabledSources = computed(() => compatibleSources.value.filter((source) => source.enabled));
 const searchingAll = computed(() => selectedSourceId.value === "all");
@@ -138,6 +140,7 @@ async function search(): Promise<void> {
   const allSources = searchingAll.value;
   if (!allSources && !source) { error.value = "先选择一个适用来源，或到来源管理添加来源。"; return; }
   if (allSources && !enabledSources.value.length) { error.value = "还没有已启用的适用来源。请先选择一个来源，点击“启用此来源并搜索”。"; return; }
+  if (isAndroidRuntime() && document.activeElement instanceof HTMLElement) document.activeElement.blur();
   // Persist the selection before capturing the generation: navigation can reuse
   // this component and must not let a previous provider populate the new view.
   await rememberRoute();
@@ -145,6 +148,7 @@ async function search(): Promise<void> {
   const requestedType = type.value;
   const requestedKeyword = keyword.value.trim();
   const generation = ++requestGeneration;
+  let resultsLocated = false;
   loading.value = true; searched.value = true; candidates.value = []; failures.value = [];
   completedSourceCount.value = 0; searchCancelled.value = false;
   try {
@@ -162,6 +166,12 @@ async function search(): Promise<void> {
         completedSourceCount.value = progress.completed;
         candidates.value = [...candidates.value, ...progress.candidates].sort((left, right) => right.score - left.score);
         if (progress.failure) failures.value = [...failures.value, progress.failure];
+        if (isAndroidRuntime() && candidates.value.length && !resultsLocated) {
+          resultsLocated = true;
+          void nextTick(() => {
+            if (generation === requestGeneration) document.querySelector<HTMLElement>(".resource-result-heading")?.scrollIntoView({ block: "start", behavior: "smooth" });
+          });
+        }
       },
     });
     if (generation !== requestGeneration) return;
@@ -216,6 +226,7 @@ function candidateKey(choice: SourceCandidate): string { return `${choice.config
       <button v-if="loading" class="ghost-button" type="button" @click="cancelSearch">停止等待</button>
     </form>
     <SourceGuide v-if="selectedSource" :config="selectedSource" compact />
+    <p v-for="source in unavailableSources" :key="source.id" class="resource-source-note">{{ sourcePlatformUnavailableReason(source) }}</p>
     <p v-if="searchingAll && !searched" class="resource-source-note">{{ enabledSources.length ? `将同时查询：${enabledSources.map((source) => source.name).join('、')}。各来源的作品与版本分别保留。` : '当前没有已启用来源。可以在上方选择一个来源，明确启用后检索。' }}</p>
     <p v-if="searchedSourceNames.length" class="resource-search-sources" role="status">{{ loading ? '正在查询' : '本次检索' }}：{{ searchedSourceNames.join('、') }}<span v-if="loading"> · 已返回 {{ completedSourceCount }} / {{ searchedSourceNames.length }}，可先查看已有结果</span><span v-else-if="searchCancelled"> · 已停止等待，保留已返回结果</span><span v-else-if="searchingAll"> · 各来源结果分别确认</span></p>
     <p v-if="selectedSource?.type === 'kungal'" class="resource-source-note">公开检索无需账号。资源条目会打开原站分享页，外链的访问权限与获取方式请在原站确认。<a :href="selectedSource.url" target="_blank" rel="noopener noreferrer" @click.prevent="openSourceWebsite">打开来源网站 ↗</a></p>
@@ -238,6 +249,7 @@ function candidateKey(choice: SourceCandidate): string { return `${choice.config
 </template>
 
 <style scoped>
+.resource-result-heading{scroll-margin-top:110px}
 .resource-search-sources{font-size:11px;line-height:1.9;color:#846698;margin:17px 0 0}.resource-search-sources>span{color:#a18caf}
 .resource-page-intro{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:28px}.resource-kicker{font-size:11px;letter-spacing:1.8px;color:#a47db8;margin:0 0 10px}.resource-page-intro h1{font-size:29px;color:#4f3e65;margin:0 0 9px;letter-spacing:-.7px}.resource-page-intro p:last-child{color:#96869f;font-size:13px;margin:0}.resource-search-panel{border:1px solid #ecdfef;border-radius:16px;background:linear-gradient(120deg,#fffafd,#faf8ff);padding:23px 25px;margin-bottom:25px}.resource-type-tabs{display:flex;gap:9px;margin-bottom:22px}.resource-type-tabs button{border:1px solid transparent;background:transparent;border-radius:7px;padding:8px 19px;color:#9c8aa6;cursor:pointer}.resource-type-tabs button.active{background:#ede4f5;color:#8d60aa;border-color:#e3d4ed}.resource-search-panel form{display:flex;align-items:flex-end;gap:13px}.resource-search-panel label{display:flex;flex-direction:column;gap:9px}.resource-search-panel label>span{font-size:11px;color:#8e7c9b}.resource-keyword{flex:1;min-width:0}.resource-source{width:230px}.resource-search-panel input,.resource-search-panel select{width:100%;box-sizing:border-box;background:#fff;border:1px solid #e4dcea;border-radius:8px;padding:12px;font-size:13px;color:#645070}.resource-search-panel .primary-button{white-space:nowrap;min-height:42px}.resource-source-note{font-size:11px;line-height:1.8;color:#a38bae;margin:16px 0 0}.resource-state{padding:60px 20px;text-align:center;color:#ad9cb6}.resource-state h2{font-size:17px;font-weight:500;margin-top:16px;color:#8b739c}.resource-state p{font-size:12px;line-height:1.8}.resource-state-symbol{font-size:38px;color:#d2bbdf}.resource-result-heading{display:flex;align-items:center;justify-content:space-between;margin:28px 0 17px}.resource-result-heading h2{font-size:17px;color:#675073}.resource-result-heading span{font-size:11px;color:#ad99b8}.resource-work-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:17px}.resource-work-card{display:flex;gap:17px;padding:16px;background:#fff;border:1px solid #eee5f1;border-radius:13px}.resource-work-cover{width:95px;height:135px;flex-shrink:0;border-radius:7px;overflow:hidden;background:#f2ebf6}.resource-work-cover :deep(img){width:100%;height:100%;object-fit:cover}.resource-work-content{min-width:0;display:flex;flex-direction:column;align-items:flex-start;flex:1}.resource-work-source{font-size:9px;color:#b095c0}.resource-work-content h3{font-size:14px;line-height:1.6;font-weight:600;color:#685176;margin:8px 0 5px;overflow-wrap:anywhere}.resource-work-year{font-size:11px;color:#b5a6bf;margin:0 0 8px}.resource-match-warning{font-size:10px;line-height:1.6;color:#bb8b69;margin:0 0 8px}.resource-work-content button{margin-top:auto;font-size:11px}.resource-work-content .small-button{border-color:#e6d9ef;color:#996cb1;background:#fcf9ff}@media(max-width:900px){.resource-search-panel form{flex-wrap:wrap}.resource-keyword{flex-basis:100%}.resource-source{flex:1}.resource-result-heading{align-items:flex-start;gap:10px;flex-direction:column}.resource-work-grid{grid-template-columns:1fr}}@media(max-width:600px){.resource-page-intro{align-items:flex-start;flex-direction:column}.resource-page-intro h1{font-size:24px}.resource-search-panel{padding:18px}.resource-type-tabs button{padding:8px 13px}.resource-work-grid{grid-template-columns:1fr}.resource-work-cover{width:76px;height:112px}}
 </style>
