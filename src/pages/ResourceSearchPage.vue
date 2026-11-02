@@ -31,7 +31,10 @@ const searchedSourceNames = ref<string[]>([]);
 const completedSourceCount = ref(0);
 const searchCancelled = ref(false);
 let requestGeneration = 0;
+let selectionToken = 0;
 let sourceInitializationFinished = false;
+interface SearchContext { type: MediaType; keyword: string; sourceId: string }
+const resultContext = ref<SearchContext>();
 const types: Array<{ value: MediaType; label: string }> = [
   { value: "anime", label: "动画" }, { value: "manga", label: "漫画" },
   { value: "novel", label: "小说" }, { value: "visual_novel", label: "Galgame" },
@@ -73,9 +76,11 @@ onMounted(async () => {
 });
 onUnmounted(() => { requestGeneration += 1; });
 function invalidateSearch(): void {
+  selectionToken += 1;
   requestGeneration += 1; loading.value = false; searched.value = false;
   candidates.value = []; failures.value = []; error.value = ""; selecting.value = ""; searchedSourceNames.value = [];
   completedSourceCount.value = 0; searchCancelled.value = false;
+  resultContext.value = undefined;
 }
 function cancelSearch(): void {
   requestGeneration += 1;
@@ -84,7 +89,7 @@ function cancelSearch(): void {
 }
 watch(type, () => { invalidateSearch(); chooseDefaultSource(); });
 watch(selectedSourceId, invalidateSearch);
-watch(keyword, () => { if (loading.value || selecting.value) invalidateSearch(); });
+watch(keyword, invalidateSearch, { flush: "sync" });
 watch(() => [route.query.q, route.query.type, route.query.provider, route.query.sourceId], applyRoute);
 function applyRoute(): void {
   const requestedType = types.find((item) => item.value === route.query.type)?.value ?? "anime";
@@ -133,10 +138,12 @@ function chooseDefaultSource(): void {
 }
 
 async function search(): Promise<void> {
+  if (loading.value || selecting.value) return;
   error.value = "";
   if (!keyword.value.trim()) { error.value = "输入作品名称，也可以输入此来源支持的作品 ID 或链接。"; return; }
   const source = selectedSource.value;
   const selectedId = selectedSourceId.value;
+  const submitted: SearchContext = { type: type.value, keyword: keyword.value.trim(), sourceId: selectedId };
   const allSources = searchingAll.value;
   if (!allSources && !source) { error.value = "先选择一个适用来源，或到来源管理添加来源。"; return; }
   if (allSources && !enabledSources.value.length) { error.value = "还没有已启用的适用来源。请先选择一个来源，点击“启用此来源并搜索”。"; return; }
@@ -144,12 +151,13 @@ async function search(): Promise<void> {
   // Persist the selection before capturing the generation: navigation can reuse
   // this component and must not let a previous provider populate the new view.
   await rememberRoute();
-  if (selectedId !== selectedSourceId.value) return;
-  const requestedType = type.value;
-  const requestedKeyword = keyword.value.trim();
+  if (!matchesSearchContext(submitted)) return;
+  const requestedType = submitted.type;
+  const requestedKeyword = submitted.keyword;
   const generation = ++requestGeneration;
   let resultsLocated = false;
   loading.value = true; searched.value = true; candidates.value = []; failures.value = [];
+  resultContext.value = submitted;
   completedSourceCount.value = 0; searchCancelled.value = false;
   try {
     let enabled = source;
@@ -181,33 +189,42 @@ async function search(): Promise<void> {
 }
 
 async function selectWork(choice: SourceCandidate): Promise<void> {
+  const context = resultContext.value;
+  if (selecting.value || !context || !matchesSearchContext(context) || !candidates.value.some((current) => current === choice)) return;
   const { candidate, config, provider } = choice;
   const generation = requestGeneration;
-  const selectedType = type.value;
-  const selectedKeyword = keyword.value.trim();
+  const selectedType = context.type;
+  const selectedKeyword = context.keyword;
+  const ownedSelection = ++selectionToken;
   selecting.value = candidateKey(choice);
-  const rawDescription = candidate.raw?.description;
-  const media: Media = {
-    id: `source:${config.id}:${candidate.sourceItemId}`, type: selectedType, title: candidate.title,
-    aliases: [...new Set([selectedKeyword, candidate.title, ...(candidate.aliases ?? [])].filter(Boolean))],
-    externalIds: [], metadata: { sourceConfigId: config.id, sourceItemId: candidate.sourceItemId,
-      ...(candidate.raw?.authors ? { sourceAuthors: candidate.raw.authors } : {}),
-      ...(candidate.raw?.editionLabel ? { sourceEdition: candidate.raw.editionLabel } : {}),
-      ...(candidate.raw?.chapterCount ? { sourceChapterCount: candidate.raw.chapterCount } : {}),
-      sourceProviderId: provider.id, sourceType: config.type, sourceTitle: candidate.title, sourceQuery: selectedKeyword, sourceMatchWarnings: choice.warnings },
-    ...(candidate.coverUrl ? { coverUrl: candidate.coverUrl } : {}),
-    ...(candidate.releaseYear ? { releaseYear: candidate.releaseYear } : {}),
-    ...(typeof rawDescription === "string" ? { description: rawDescription } : {}),
-  };
-  session.remember([{ media, score: choice.score, reason: "exact" }]);
-  try { await library.save(media); }
-  catch (cause) {
-    media.metadata.sourceSaveError = cause instanceof Error ? cause.message : "作品尚未保存，当前会话仍可查看来源章节";
+  try {
+    const rawDescription = candidate.raw?.description;
+    const media: Media = {
+      id: `source:${config.id}:${candidate.sourceItemId}`, type: selectedType, title: candidate.title,
+      aliases: [...new Set([selectedKeyword, candidate.title, ...(candidate.aliases ?? [])].filter(Boolean))],
+      externalIds: [], metadata: { sourceConfigId: config.id, sourceItemId: candidate.sourceItemId,
+        ...(candidate.raw?.authors ? { sourceAuthors: candidate.raw.authors } : {}),
+        ...(candidate.raw?.editionLabel ? { sourceEdition: candidate.raw.editionLabel } : {}),
+        ...(candidate.raw?.chapterCount ? { sourceChapterCount: candidate.raw.chapterCount } : {}),
+        sourceProviderId: provider.id, sourceType: config.type, sourceTitle: candidate.title, sourceQuery: selectedKeyword, sourceMatchWarnings: choice.warnings },
+      ...(candidate.coverUrl ? { coverUrl: candidate.coverUrl } : {}),
+      ...(candidate.releaseYear ? { releaseYear: candidate.releaseYear } : {}),
+      ...(typeof rawDescription === "string" ? { description: rawDescription } : {}),
+    };
     session.remember([{ media, score: choice.score, reason: "exact" }]);
+    try { await library.save(media); }
+    catch (cause) {
+      media.metadata.sourceSaveError = cause instanceof Error ? cause.message : "作品尚未保存，当前会话仍可查看来源章节";
+      session.remember([{ media, score: choice.score, reason: "exact" }]);
+    }
+    if (generation !== requestGeneration || !matchesSearchContext(context)) return;
+    await router.push("/media/" + encodeURIComponent(media.id));
+  } finally {
+    if (ownedSelection === selectionToken) selecting.value = "";
   }
-  if (generation !== requestGeneration || selectedType !== type.value) return;
-  try { await router.push("/media/" + encodeURIComponent(media.id)); }
-  finally { selecting.value = ""; }
+}
+function matchesSearchContext(context: SearchContext): boolean {
+  return context.type === type.value && context.keyword === keyword.value.trim() && context.sourceId === selectedSourceId.value;
 }
 function candidateKey(choice: SourceCandidate): string { return `${choice.config.id}:${choice.candidate.sourceItemId}`; }
 </script>

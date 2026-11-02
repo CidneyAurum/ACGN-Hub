@@ -162,6 +162,48 @@ describe("download task lifecycle", () => {
     expect(nativeInvoke.mock.calls.filter(([name]) => name === "mobile_http_start")).toHaveLength(state === "paused" ? 0 : 1);
   });
 
+  it("recreates a missing Android handle when resumed before its next status poll", async () => {
+    nativeInvoke.mockReset();
+    nativeInvoke.mockImplementation(async (name: string) => {
+      if (name === "mobile_http_resume") throw "没有找到安卓下载记录；请从资源页重新添加";
+      if (name === "mobile_http_start") return { engineTaskId: "new-native" };
+      throw new Error("Unexpected native operation: " + name);
+    });
+    const f = fixture([task({ engineId: "mobile_http", state: "paused", engineTaskId: "lost-native", completedBytes: 30 })]);
+    f.settings.httpDownloadEngine = "mobile_http";
+    f.resolve.mockReturnValue(new MobileHttpClient());
+    await f.manager.resume("one");
+    expect(f.tasks()[0]).toMatchObject({ state: "downloading", engineTaskId: "new-native", completedBytes: 30 });
+    expect(nativeInvoke.mock.calls.filter(([name]) => name === "mobile_http_start")).toHaveLength(1);
+  });
+
+  it.each(["pause", "cancel"] as const)("preserves the user's %s intent when the native Android record has vanished", async (action) => {
+    nativeInvoke.mockReset().mockRejectedValue("没有找到安卓下载记录；请从资源页重新添加");
+    const f = fixture([task({ engineId: "mobile_http", state: "downloading", engineTaskId: "lost-native" })]);
+    f.settings.httpDownloadEngine = "mobile_http";
+    f.resolve.mockReturnValue(new MobileHttpClient());
+    await f.manager[action]("one");
+    expect(f.tasks()[0]).toMatchObject({ state: action === "pause" ? "paused" : "cancelled", engineTaskId: undefined });
+    expect(nativeInvoke.mock.calls.filter(([name]) => name === "mobile_http_start")).toHaveLength(0);
+  });
+
+  it.each(["安卓下载记录损坏", "读取安卓下载记录失败：Permission denied", "没有找到安卓下载记录；请从资源页重新添加 (permission)"])("does not treat a different Android control failure as a missing record: %s", async (message) => {
+    for (const action of ["resume", "pause", "cancel"] as const) {
+      nativeInvoke.mockReset().mockRejectedValue(new Error(message));
+      const f = fixture([task({ engineId: "mobile_http", state: action === "resume" ? "paused" : "downloading", engineTaskId: "retain-native" })]);
+      f.settings.httpDownloadEngine = "mobile_http";
+      f.resolve.mockReturnValue(new MobileHttpClient());
+      if (action === "resume") {
+        await f.manager.resume("one");
+        expect(f.tasks()[0]).toMatchObject({ state: "failed", engineTaskId: "retain-native", error: message });
+      } else {
+        await expect(f.manager[action]("one")).rejects.toThrow(message);
+        expect(f.tasks()[0]).toMatchObject({ state: "downloading", engineTaskId: "retain-native" });
+      }
+      expect(nativeInvoke.mock.calls.filter(([name]) => name === "mobile_http_start")).toHaveLength(0);
+    }
+  });
+
   it.each(["安卓下载记录损坏", "读取下载记录失败：Permission denied", "连接下载来源失败", "没有找到安卓下载记录；请从资源页重新添加 (permission)"])("does not recreate an Android download for a different native failure: %s", async (message) => {
     nativeInvoke.mockReset();
     nativeInvoke.mockRejectedValueOnce(new Error(message));

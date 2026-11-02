@@ -2,9 +2,9 @@
 
 A library for anime, manga, light novels and visual novels on Windows and Android. Discover works, compare sources, manage downloads and read your offline collection in one place.
 
-**[Download released builds](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [中文](README.md) · [0.5.1 user guide, Chinese](docs/releases/v0.5.1-usage.md)
+**[Download released builds](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [中文](README.md) · [0.5.2 user guide, Chinese](docs/releases/v0.5.2-usage.md)
 
-**[Version 0.5.1 is released, with all nine assets downloaded and verified](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.1)**, addressing older WebView compatibility, completion boundaries and reading progress. See the [patch guide](docs/releases/v0.5.1-usage.md) and [fix record](docs/research/bugfixes-v051.md), in Chinese. Mikan loads in the local API 35 emulator, but the cause on the reported physical phone remains unconfirmed.
+**Version 0.5.2 has completed local verification and packaging and awaits GitHub release verification**, improving resource selection, library / source initialization, Android task recovery and JSON request lifecycles. See the [guide](docs/releases/v0.5.2-usage.md), in Chinese. Published [0.5.1](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.1) remains available. This release does not change network routing or remove node restrictions.
 
 ## Features
 
@@ -117,7 +117,7 @@ The default build includes arm64 and x86_64. Packaging copies verified native li
 
 ## Verification and credits
 
-Version 0.5.1 passes **714 frontend tests, all 99 browser tests and 118 Rust tests**, with 2 Rust tests ignored by default. Native Windows samples open existing TXT / CBZ files with fullscreen and saved positions. The API 35 Android emulator preserves 14 sources / 1 enabled source after upgrading, reads a 100-item Mikan feed, displays HTTP403 and completes a 170.2 KB text download with reading, rotation and chooser cancellation. The original 9 database tables, 3 media files and 24 older executables remain intact. Large-file pause / resume and volume-switching samples from 0.5.0 remain historical; see the [verification record](VERIFICATION.md) for exact identities and scope. Full game installation / launch and the reported physical phone are not verified. EPUB and PDF require external readers.
+Version 0.5.2 passes **743 frontend tests, all 102 browser tests and 118 Rust tests** (2 ignored), plus type checks. Final Windows samples read existing TXT / CBZ files and saved positions. The API35 Android emulator preserves collections / sources after upgrading, invalidates changed LNovel queries, opens a 20-volume list and downloads / reads a fresh first volume with chooser cancellation. Original 9 database tables, 3 media files and 26 older executables remain intact. Final delivery verification is pending; see the [verification record](VERIFICATION.md) for identities and scope. Complete game installation / launch is not verified. EPUB and PDF require external readers.
 
 See the [verification record](VERIFICATION.md), [0.5.0 guide](docs/releases/v0.5.0-usage.md), [released 0.4.0 guide](docs/releases/v0.4.0-usage.md), [archived README](HISTORY.md) and [third-party notices](THIRD_PARTY_NOTICES.md). The archive preserves historical wording and original path references.
 

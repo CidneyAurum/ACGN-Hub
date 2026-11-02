@@ -5,8 +5,11 @@ type ResponseErrorConstructor = new (code: "invalid_response", message: string) 
 export async function parseJsonResponse(response: JsonResponse, ErrorType: ResponseErrorConstructor): Promise<unknown> {
   try { return await response.json(); }
   catch (cause) {
-    if (isTimeoutError(cause)) throw cause;
-    throw new ErrorType("invalid_response", "API 返回的内容不是有效 JSON");
+    // Only a parsing failure establishes invalid JSON. Response bodies can
+    // reject while reading or cancelling, including string errors from IPC;
+    // keep those reasons intact for the caller's transport classification.
+    if (cause instanceof SyntaxError) throw new ErrorType("invalid_response", "API 返回的内容不是有效 JSON");
+    throw cause;
   }
 }
 

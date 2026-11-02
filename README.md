@@ -2,9 +2,9 @@
 
 为喜欢的故事留一个位置。面向 Windows 与 Android 的动画、漫画、轻小说与 Galgame 收藏工作台，将作品发现、资源检索、下载整理和离线阅读放在一起。
 
-**[下载已发布版本](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [0.5.1 使用指南](docs/releases/v0.5.1-usage.md) · [English](README.en.md)
+**[下载已发布版本](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [0.5.2 使用指南](docs/releases/v0.5.2-usage.md) · [English](README.en.md)
 
-**[0.5.1 已正式发布并通过 9 附件下载回验](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.1)**，修复旧 WebView 兼容、下载完成边界与阅读进度；见[修复及诊断](docs/releases/v0.5.1-usage.md)。蜜柑在本机 API 35 模拟器读取成功，反馈手机根因仍未确认，不宣称其实体设备已修复。
+**0.5.2 本地验收和打包完成，待 GitHub 发布回验**，改进资源选择、收藏 / 来源初始化、Android任务恢复与JSON生命周期；见[指南](docs/releases/v0.5.2-usage.md)。已发布的 [0.5.1](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.1) 继续可用，本版不重构网络出口或处理节点限制。
 
 ## 发现、收藏，再慢慢看
 
@@ -147,10 +147,12 @@ powershell -NoProfile -File .\src-tauri\scripts\build-android.ps1 -Action build
 
 ## 验证与文档
 
-0.5.1 回归通过 **714 项前端单测、99 项完整浏览器交互、118 项 Rust 测试**，另 2 项 Rust 默认忽略。最终 Windows 程序实测既有 TXT / CBZ 内读、全屏与进度；Android API 35 模拟器升级保留14来源 / 1启用，读取蜜柑100项、显示HTTP403、完成170.2KB文本下载 / 内读 / 旋转与选择器取消。原9表、3媒体和24个旧程序保持。0.5.0 的大文件暂停续传及卷间切换作为历史样本单列；具体身份与未覆盖范围见[验证记录](VERIFICATION.md)。完整 Galgame 安装运行与反馈实体手机均未验收；EPUB / PDF 不使用内置阅读器。
+0.5.2通过 **743单测、102完整浏览器、118 Rust**（2默认忽略）及类型检查。最终Windows实测TXT / CBZ内读与已有进度；API35 Android升级保留收藏和来源，真实LNovel候选改词失效、20卷详情、新卷1下载 / 内读 / 选择器取消通过。原9表、3媒体、26旧EXE保持，最终交付待回验。身份与未覆盖范围见[验证记录](VERIFICATION.md)；完整Galgame安装运行未验收，EPUB / PDF使用外部阅读器。
 
 | 文档 | 内容 |
 | --- | --- |
+| [0.5.2 使用指南](docs/releases/v0.5.2-usage.md) | 资源选择、初始化、任务恢复及请求生命周期修复 |
+| [0.5.2 修复记录](docs/research/bugfixes-v052.md) | 确定复现、回归及本版构建和原生范围 |
 | [0.5.1 使用指南](docs/releases/v0.5.1-usage.md) | 兼容补丁、升级与 Android 来源失败排查 |
 | [0.5.1 修复记录](docs/research/bugfixes-v051.md) | 确定复现、修复前后测试及手机网络诊断边界 |
 | [0.5.0 使用指南](docs/releases/v0.5.0-usage.md) | Windows / Android 安装、下载、手机存储、阅读与开发构建 |

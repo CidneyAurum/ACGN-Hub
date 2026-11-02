@@ -14,8 +14,8 @@ export const useMediaLibraryStore = defineStore("media-library", () => {
   const sortedItems = computed(() => [...items.value].sort((a, b) => a.title.localeCompare(b.title)));
 
   async function initialize(): Promise<void> {
-    if (repository) return;
     if (initializing) return initializing;
+    if (repository) return;
     loading.value = true;
     initializing = (async () => {
       try {

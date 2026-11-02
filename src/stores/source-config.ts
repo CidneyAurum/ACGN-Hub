@@ -18,8 +18,8 @@ export const useSourceConfigStore = defineStore("source-config", () => {
   const enabledConfigs = computed(() => activeConfigs.value.filter((config) => config.enabled));
 
   async function initialize(): Promise<void> {
-    if (repository) return;
     if (initializing) return initializing;
+    if (repository) return;
     loading.value = true;
     error.value = "";
     initializing = (async () => {

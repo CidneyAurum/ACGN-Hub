@@ -1,5 +1,26 @@
 # ACGN Hub 验证记录
 
+## 最新增量：0.5.2 流程与生命周期（本地验收完成，待 GitHub 回验）
+
+本版源码回归、最终双端原生样本、资料保留及打包通过，综合清单和桌面入口已完成；仅待GitHub源码 / 标签及9附件上传回读。本轮修复本地并发与请求生命周期，不做网络重构或处理节点限制。
+
+| 检查 | 当前结果与边界 |
+| --- | --- |
+| 全量单测 | `.work/v052-evidence/unit-final.json`：71文件 / **743通过、0失败、success=true** |
+| 最终完整浏览器 | `.work/v052-evidence/browser-delivery.json`：**102通过、0失败 / 跳过 / flaky**，退出0；包含最后部分结果停止等待的选择锁修复。先前 `browser-final.json` 101项为前一阶段，不混记 |
+| Rust / 类型 | `windows-native-tests.log`：**118通过 / 2默认忽略 / 0失败**；Vue和E2E类型检查均退出0 |
+| 初始化红绿 | `store-before.log` 两项失败，慢list未返回时已upsert；修复后 `store-after.log` 为3文件 / 16项通过，读取完成前不写、收藏 / 来源新状态保持 |
+| JSON红绿 | 本轮重新红灯2项：无signal的10秒IPC仍pending，读取TLS string误转无效JSON；修复后 `.work/json-lifecycle-final.json` 7文件 / 68项通过，类型检查退出0，含超时夹紧、caller取消原因与fallback资源清理 |
+| 资源与句柄 | 新浏览器场景覆盖查询变化撤销旧结果、慢保存改词不导航和重复选择；管理器单测覆盖不经poll直接resume、确切missing重建、取消及权限 / 损坏不重建 |
+| 最终APK | **54,972,998字节**，SHA256 `F446795A6F3A78480DE3B115B852014F9D2ABB617817A2F58DAC681FFB08F437`；0.5.2 / 5002、min26 / target36、双64位ABI，签名 / CRC /16KiB对齐通过，证书沿用，无用户资料 / 私钥 |
+| Android原生 | `android-native.json` 22证据范围内通过：API35 x86_64升级保留收藏1，设置显示13来源 / 1启用；LNovel88→99无旧选择→88进入20卷，新卷1 10 / 10、第二章全屏正文、`verified-export-chooser.*` 真实选择器取消，普通reader重开第二章；同PID4197 HOT124ms、无该PID崩溃。句柄删除 / 慢IO / 双击及停止等待竞态为自动测试范围，不冒充原生实测 |
+| Windows原生 | `windows-native.json`：EXE **25,972,224字节**、`DA6A55FB0250AED1652114D2BE35B9844FFE18467826CFB1459840DC1A4C286A`；setup **7,314,564字节**、`7C5DBB58991E19F473D2B2588BF6328D2125C31A1F5BB7913F4B7306F48A5819`，构建扫描 / UIAutomation TXT+CBZ / 正常退出0通过，无新增检测；未重下原文件、未安装setup |
+| 资料保留 | `data-preservation.json` 最后 `2026-11-02T04:11:36Z` passed，9表 / 3媒体 / 26旧EXE含0.5.1保持，完整性ok |
+| 便携 / 入口 | `portable.json`：**9,689,818字节**，SHA256 `CAF17C235FFEAB5365432465EE447307AC9C60411851C2721CE4D2E198BD7D78`，12白名单CRC / 哈希，无Data；四产物清单 / 校验齐全。桌面0.5.2沿用canonical032Data、旧快捷方式备份，测试模拟器 / Windows已关闭 |
+| 本版待验 | 仅GitHub源码 / 标签及9附件上传摘要、实际下载哈希 / 大小及远端身份核对。旧版结果不移记 |
+
+详见[0.5.2 修复记录](docs/research/bugfixes-v052.md)及[使用指南](docs/releases/v0.5.2-usage.md)。JSON取消结束前端等待，native剩余工作仍由其超时约束，未宣称强行终止所有系统请求。
+
 ## 最新增量：0.5.1 兼容与错误修复（正式发布与附件回验完成）
 
 本轮缺陷复现、源码修复、完整回归、双端原生样本、打包及GitHub附件实际回读完成，[0.5.1 已正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.1)。反馈手机的蜜柑失败缺少设备型号、WebView及手机浏览器结果，不能确认根因或声称实体手机已修复。

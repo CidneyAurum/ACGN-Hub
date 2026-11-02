@@ -1,7 +1,7 @@
 {
   "name": "acgn-hub",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "ACGN 作品发现、下载与离线阅读桌面应用",
   "type": "module",
   "scripts": {

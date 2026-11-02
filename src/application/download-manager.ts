@@ -145,7 +145,7 @@ export class DownloadManager {
       const handle = status.engineTaskId ?? task.engineTaskId;
       try { await this.engine(task).pause(handle); }
       catch (cause) {
-        if (task.engineId === "aria2" && isMissingRemoteTask(cause)) {
+        if (isMissingRemoteTask(cause, task.engineId)) {
           await this.save({ ...task, engineTaskId: undefined, stage: undefined, speedBytesPerSecond: 0, updatedAt: nowIso() });
           return;
         }
@@ -172,7 +172,7 @@ export class DownloadManager {
       let engineTaskId = task.engineTaskId;
       if (engineTaskId) {
         try { await this.engine(task).pause(engineTaskId); }
-        catch (cause) { if (task.engineId !== "aria2" || !isMissingRemoteTask(cause)) throw cause; engineTaskId = undefined; }
+        catch (cause) { if (!isMissingRemoteTask(cause, task.engineId)) throw cause; engineTaskId = undefined; }
       }
       await this.save({ ...task, engineTaskId, state: "paused", stage: undefined, speedBytesPerSecond: 0, error: undefined, errorCode: undefined, updatedAt: nowIso() });
     });
@@ -192,7 +192,10 @@ export class DownloadManager {
     await this.lock(id, async () => {
       const task = this.current(id);
       this.requireState(task, ["queued", "downloading", "paused", "failed"], "取消");
-      if (task.engineTaskId) await this.engine(task).cancel(task.engineTaskId);
+      if (task.engineTaskId) {
+        try { await this.engine(task).cancel(task.engineTaskId); }
+        catch (cause) { if (!isMissingRemoteTask(cause, task.engineId)) throw cause; }
+      }
       const cancelled: DownloadTask = { ...task, state: "cancelled", stage: undefined, engineTaskId: undefined, speedBytesPerSecond: 0, error: undefined, errorCode: "USER_CANCELLED", updatedAt: nowIso() };
       try { await this.save(cancelled); }
       catch (cause) {
@@ -281,7 +284,7 @@ export class DownloadManager {
           if (task.engineTaskId) {
             try { await engine.resume(remoteId); }
             catch (cause) {
-              if (task.engineId !== "aria2" || !isMissingRemoteTask(cause)) throw cause;
+              if (!isMissingRemoteTask(cause, task.engineId)) throw cause;
               remoteId = await engine.add(parseDownloadTarget(task.sourceUrl), options);
             }
           }
@@ -385,8 +388,12 @@ export function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : typeof cause === "string" ? cause : "操作未完成，请重试。";
 }
 
-function isMissingRemoteTask(cause: unknown): boolean {
-  return /(?:GID|download task|任务).*(?:not found|不存在)/i.test(errorMessage(cause));
+function isMissingRemoteTask(cause: unknown, engineId: string): boolean {
+  // The native missing-record message is exact. Permission, corruption or
+  // transport failures must retain their handle and never re-submit a URL.
+  const message = errorMessage(cause);
+  if (engineId === "mobile_http") return message === "没有找到安卓下载记录；请从资源页重新添加";
+  return engineId === "aria2" && /(?:GID|download task|任务).*(?:not found|不存在)/i.test(message);
 }
 function statusFailureCode(cause: unknown): string {
   return /connect|network|fetch|timed?\s*out|timeout|socket|无法连接|连接失败|连接.*拒绝|RPC.*(?:unavailable|不可用|失联|离线)/i.test(errorMessage(cause))
