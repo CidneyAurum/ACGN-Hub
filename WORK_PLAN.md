@@ -1,6 +1,6 @@
 # ACGN Hub 工作计划与当前状态
 
-## 0.5.0 当前交付：Windows EXE 与 Android APK（本地验收完成，待 GitHub 回验）
+## 0.5.0 当前交付：Windows EXE 与 Android APK（正式发布与回验完成）
 
 按用户要求完成 Windows 与 Android 双端封装，保留动画、漫画、轻小说及 Galgame 的作品发现和来源检索。Android 最低 API 26 / Android 8，通用已签名 APK 包含 arm64-v8a 与 x86_64；使用原生前台 HTTP 引擎、私有目录、CBZ / TXT 内置阅读和系统选择器，磁力 / Torrent、Python 工具及 Windows 游戏运行明确需要电脑版。没有添加菠萝包或生成 AI 角色。
 
@@ -10,11 +10,13 @@
 | --- | --- |
 | 工程回归 | 最终 65 文件 / 670 单测、109 Rust（2 默认忽略）通过；最近完整浏览器 91 项通过，最后补充仅任务可选状态与管理器测试，无布局变化；各轮类型检查与适用范围单列 |
 | 原生样本 | Windows UIAutomation 与 Android ADB / UIAutomator，独立资料库 / API 35 模拟器，无 CDP 或脚本注入；最终构建和此前阶段下载分别记载 |
-| 数据保留 | `data-preservation.json` 最新 `2026-11-02T00:48:32Z`，9 表 / 3 媒体 / 22 旧 EXE 保持、完整性 ok、不记录私有值 |
+| 数据保留 | `data-preservation.json` 最后 `2026-11-02T00:58:47Z`，9 表 / 3 媒体 / 22 旧 EXE 保持、完整性 ok、不记录私有值 |
 | 本地四产物 | `release/v0.5.0` 的 Windows EXE、NSIS、便携 ZIP 与 Android APK 已齐；独立综合清单记录各自大小和 SHA256 |
 | 便携 ZIP | 9,670,512 字节，SHA256 `8E504D7C7A0DA396CEE04BC804811D72944D821173E39FA2AA609D3BD4D4490F`，12 项白名单、CRC / 每项哈希通过，无用户 Data 或媒体 |
 | 桌面入口 | 已切至 `START-ACGN-0.5.0.cmd` 与新版图标，继续沿用原 `release/v0.3.2/Data`，旧快捷方式保留备份 |
-| GitHub | 仅剩源码 / 标签推送、9 个发布附件上传及实际下载回读、public / main / tag 一致性核验；完成前不写已发布 |
+| GitHub | [0.5.0 正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.0)，公开仓库、非草稿；9 附件实际下载 SHA256 / API 摘要 / 大小全部通过，12 成员 ZIP CRC / 哈希及 APK 身份通过。发布回验 `2026-11-02T00:59:50Z` 为 passed |
+
+标签 `v0.5.0` 固定提交 `ffcbdc6c9b90d58a899aaf3d21a673237b2f4701`，发布核验当时 main / tag / HEAD 一致；随后 main 仅补本文等发布回执，不移动标签、不改源码或发布附件。测试模拟器已正常关闭，本项目测试进程已退出。
 
 包内 [0.5.0 使用指南](docs/releases/v0.5.0-usage.md)已冻结；构建身份、样本与未覆盖范围见[验证记录](VERIFICATION.md)和[Android 记录](docs/research/android-v050.md)。Android 实测为 x86_64 API 35 模拟器，未验实体 ARM64 手机、全部 API 26+、持续后台下载、完整 Galgame 下载安装运行或公共目录实际保存。以下保留各版本历史状态，不作为当前待办。
 

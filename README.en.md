@@ -4,7 +4,7 @@ A library for anime, manga, light novels and visual novels on Windows and Androi
 
 **[Download released builds](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [中文](README.md) · [0.5.0 user guide, Chinese](docs/releases/v0.5.0-usage.md)
 
-**Windows EXE, portable ZIP and Android APK builds for 0.5.0 have passed local packaging and native sample verification; GitHub upload and download verification remain.** Android samples include HTTP pause / resume, recovery after process termination, novel downloads and built-in reading. Releases above are the source of published downloads; see the [0.5.0 guide](docs/releases/v0.5.0-usage.md) for verification scope.
+**[Version 0.5.0 is released](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.0)** with Windows EXE, portable ZIP and Android APK downloads. All nine release assets were downloaded and verified against their sizes, SHA256 hashes and GitHub digests. Android samples include HTTP pause / resume, recovery after process termination, novel downloads and built-in reading; see the [0.5.0 guide](docs/releases/v0.5.0-usage.md) for verification scope.
 
 ## Features
 

@@ -1,8 +1,8 @@
 # ACGN Hub 验证记录
 
-## 最新增量：0.5.0 Windows / Android（构建与原生样本通过，待发布附件回验）
+## 最新增量：0.5.0 Windows / Android（正式发布与附件回验完成）
 
-最终 Windows EXE / NSIS、便携 ZIP 和 Android APK 已完成本地打包、静态检查与原生样本验证；综合清单与桌面入口已更新，原用户数据最后复核保持。仅待 GitHub 源码 / 标签及 9 附件上传后的实际下载回验，没有提前记作发布完成。各阶段只按自身文件身份记录，不把旧候选下载移记到最终包。
+最终 Windows EXE / NSIS、便携 ZIP 和 Android APK 已完成打包、静态检查、原生样本与 GitHub 附件实际下载回验，[0.5.0 已正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.0)。综合清单、桌面入口与原用户资料复核通过，测试模拟器及本项目测试进程已退出。各阶段只按自身文件身份记录，不把旧候选下载移记到最终包。
 
 | 检查 | 当前证据与范围 |
 | --- | --- |
@@ -23,15 +23,16 @@
 | Windows 实际漫画与重启 | 独立资料库完成《葬送的芙莉莲》一话 **39 页 CBZ**，9,357,847 字节、ZIP CRC 通过，SHA256 `2738AB0F7A1E2851C34D5B2F6ECEA78C517E377B0D6122F55ED5CE24629E9773`；见 `windows-comic-outputs.json` 与阅读截图。正常重启后的下载与小说阅读界面分别有 `windows-restart-downloads.json`、`windows-reader-restored.json`，全屏界面有 `windows-reader-fullscreen.json`，不将快照泛化为所有交互的自动断言 |
 | Windows 阶段正常程序复验 | `windows-release-native-final.json` 对应 `6F8270F7B71E8944A8306956C83FF4BA8FBDB2D635F4663E0EB7A39E958D86B5`：UIAutomation 确认 4 项完成记录、小说章节 / 章内滚动和漫画第 2 页重启恢复，两次正常退出 0、无新增检测、未重下成品。该阶段与后续最终 `3C5AF9…` 分开，不因回执名 `final` 混为最终身份 |
 | 最终 Windows 原生 | `windows-delivery-native.json` 对应最终 `3C5AF9…` 程序：UIAutomation 读取隔离资料库 4 项已有完成记录，39 页漫画图像可读且恢复第 2 页，小说 7 章可读且恢复第二章 / 章内滚动。未重新下载既有成品、未启动原用户资料库；正常退出 0、进程结束、无新增检测 |
-| 原用户数据保留 | `.work/v050-evidence/data-preservation.json` 最后 `2026-11-02T00:48:32Z`，**allPreserved=true**、数据库完整性 **ok**；原 **9 表、3 媒体、22 旧 EXE** 与基线保持，不记录私有值、不沿用旧版结果 |
+| 原用户数据保留 | `.work/v050-evidence/data-preservation.json` 最后 `2026-11-02T00:58:47Z`，**allPreserved=true**、数据库完整性 **ok**；原 **9 表、3 媒体、22 旧 EXE** 与基线保持，不记录私有值、不沿用旧版结果 |
 | 便携 ZIP / 综合清单 | `portable-delivery.json`：**9,670,512 字节**，SHA256 `8E504D7C7A0DA396CEE04BC804811D72944D821173E39FA2AA609D3BD4D4490F`；12 白名单成员、CRC / 逐项哈希通过，无用户 Data / 媒体。`RELEASE-ASSETS.json` 和 `CHECKSUMS-SHA256.txt` 已覆盖四产物，Windows 自身 `VERSION.json` / `SHA256SUMS.txt` 保留 |
 | 桌面入口 | `desktop-shortcut-delivery.json` 记录入口切至 `START-ACGN-0.5.0.cmd`、新版图标并继续沿用原 `release/v0.3.2/Data`；旧快捷方式已备份 |
-| 尚待完成的交付项 | 仅 GitHub 源码 / 标签与 9 附件上传摘要、实际下载回读、public / main / tag 身份核对 |
-| GitHub 交付 | 尚未发布 0.5.0；最终附件、远端身份及实际下载回验尚待完成 |
+| GitHub 附件回验 | `.work/v050-evidence/github-published-verification.json` 于 `2026-11-02T00:59:50Z` 为 **passed=true**；9 附件大小 / SHA256 / GitHub API digest 与实际下载一致，12 ZIP 成员 CRC / 逐项哈希、两套校验及 APK 静态回执 / 签名身份通过，无用户 Data |
+| 正式发布身份 | 公开仓库、`isDraft=false`、正式发布 `2026-11-02T00:59:48Z`。标签 `v0.5.0` 固定 `ffcbdc6c9b90d58a899aaf3d21a673237b2f4701`，回验当时 main / tag / HEAD 一致；随后 main 仅补发布文档回执，标签和附件保持 |
+| 最终汇总 | `.work/v050-evidence/verification-final.json` 为 **allChecksPassed=true**，聚合单测、Rust、浏览器、Windows、Android、数据保留、GitHub 与便携包 8 项，保持各自适用范围。实际下载回读的 APK 又经 SDK 签名 / 对齐核验，`github-downloaded-apk-verification.json` 的 SHA256 同 `2F8A9B…`，v2 / v3 通过 |
 
 APK SHA256 标识文件内容，签名证书 SHA256 指纹为 `40C95E2A527E537C9DA136667095B982F9402A969953D8F8C0D1A64BE34744A8`，二者分别记录。私钥和口令不进入公开证据或发布附件。本地 `.work` 回执不随源码上传；公开构建方法与验证边界见 [Android 0.5.0 记录](docs/research/android-v050.md)。
 
-发布资产清单已由 `scripts/create-crossplatform-manifest.py` 生成；远端附件回验完成前不写发布完成。原生样本限本机 Windows 与独立 Android API 35 模拟器，未测实体手机、全部 API 26+、ARM64 物理设备或 16 KiB 页面设备。选择器仅打开并取消，无对外发送或公共目录保存验证；持续后台下载、完整 Galgame 安装运行和 NSIS 实际安装均未验收。
+发布资产清单已由 `scripts/create-crossplatform-manifest.py` 生成，远端回验完成。原生样本限本机 Windows 与独立 Android API 35 模拟器，未测实体手机、全部 API 26+、ARM64 物理设备或 16 KiB 页面设备。选择器仅打开并取消，无对外发送或公共目录保存验证；持续后台下载、完整 Galgame 安装运行和 NSIS 实际安装均未验收。
 
 ## 最新增量：0.4.0 来源可靠性与便携迁移
 

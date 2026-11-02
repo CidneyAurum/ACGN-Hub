@@ -1,6 +1,6 @@
 # Android 0.5.0：构建与验证记录
 
-Android 与 Windows 最终构建、静态检查、原生样本及本地打包已完成，综合清单和桌面入口已更新；仅待 GitHub 上传与附件下载回验。最终 APK 已实际完成 HTTP 暂停 / 冷启动恢复 / 续传、小说第二卷重新下载与内读、前后卷切换和既有漫画页码恢复。本文区分最终产物与此前各阶段，不将旧候选下载冒充最终包重新下载。
+Android 与 Windows 最终构建、静态检查、原生样本及打包已完成，[0.5.0 已正式发布并通过附件下载回验](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.0)。综合清单和桌面入口已更新。最终 APK 已实际完成 HTTP 暂停 / 冷启动恢复 / 续传、小说第二卷重新下载与内读、前后卷切换和既有漫画页码恢复。本文区分最终产物与此前各阶段，不将旧候选下载冒充最终包重新下载。
 
 ## 最终交付身份与原生验证
 
@@ -25,7 +25,9 @@ Android 与 Windows 最终构建、静态检查、原生样本及本地打包已
 
 独立汇总 `.work/v050-evidence/android-delivery-native.json` 已完成，`passedWithinDocumentedScope=true`，核对 25 份 XML、截图、SHA256 及当前进程只读检查。执行 ABI 为 x86_64，arm64-v8a 完成构建和静态校验，未跑实体 ARM64。全局旧崩溃记录含早期候选 PID 的事件，没有据此声称所有候选从未崩溃；最终当前 PID 的崩溃检查无事件。
 
-本地交付已完成：便携 ZIP **9,670,512 字节**，SHA256 `8E504D7C7A0DA396CEE04BC804811D72944D821173E39FA2AA609D3BD4D4490F`，`portable-delivery.json` 记录 12 个白名单成员、CRC / 逐项哈希通过，无用户 Data / 媒体。综合四产物清单和两套校验文件已生成，`USAGE.zh-CN.md` 与便携说明一致。桌面入口已切至 `START-ACGN-0.5.0.cmd`、新版图标，沿用原 `release/v0.3.2/Data` 并备份旧快捷方式。仅剩 GitHub 源码 / 标签与 9 附件上传回验；包内使用指南已冻结，发布后仅补简短回执。
+交付已完成：便携 ZIP **9,670,512 字节**，SHA256 `8E504D7C7A0DA396CEE04BC804811D72944D821173E39FA2AA609D3BD4D4490F`，12 个白名单成员、CRC / 逐项哈希通过，无用户 Data / 媒体。综合四产物清单、两套校验及一致的 `USAGE.zh-CN.md` 已发布。桌面入口切至 `START-ACGN-0.5.0.cmd`、新版图标，沿用原 `release/v0.3.2/Data` 并备份旧快捷方式。包内使用指南保持发布字节。
+
+正式发布于 `2026-11-02T00:59:48Z`；`.work/v050-evidence/github-published-verification.json` 于 `00:59:50Z` 为 `passed=true`、公开仓库、`isDraft=false`。9 附件实际下载大小 / SHA256 / GitHub API digest 全部一致，12 ZIP 成员 CRC / 哈希、APK 静态回执和签名身份、所有校验及无 Data 检查通过。`v0.5.0` 标签固定 `ffcbdc6c9b90d58a899aaf3d21a673237b2f4701`，回验当时 main / tag / HEAD 相同；此后 main 只补发布文档回执，不移动标签、不改源码或附件。模拟器已正常关闭，本项目测试进程退出。
 
 ## 阶段构建与原生样本
 
@@ -136,6 +138,6 @@ Windows 正常 UI 还完成《葬送的芙莉莲》一话 CBZ 下载及内置阅
 
 原生正常重启后已打开原有下载记录与小说阅读界面，快照为 `windows-restart-downloads.json`、`windows-reader-restored.json`。全屏交互另有 `windows-reader-fullscreen.json`；这些实际操作与定向浏览器回归分别记录，不将截图本身当作所有交互都已自动断言通过。
 
-本轮 `.work/v050-evidence/data-preservation.json` 最后 `2026-11-02T00:48:32Z` 记录 `allPreserved=true`、数据库完整性 `ok`；9 个数据库表、3 个原媒体和 22 个旧 EXE 与基线保持，不记录私有值，也未沿用旧版结果。
+本轮 `.work/v050-evidence/data-preservation.json` 最后 `2026-11-02T00:58:47Z` 记录 `allPreserved=true`、数据库完整性 `ok`；9 个数据库表、3 个原媒体和 22 个旧 EXE 与基线保持，不记录私有值，也未沿用旧版结果。
 
-阶段 `6F8270…` 和最终 `3C5AF9…` Windows 程序的正常原生复验分别记录，最终包已通过扫描与样本复验，便携包、综合清单和桌面入口已完成。仅 GitHub 上传与附件实际下载回验待做，不提前写发布完成。0.4.0 证据保持原身份，不移记到本版。公开源码不含本地回执、签名材料或用户媒体；状态见 [VERIFICATION.md](../../VERIFICATION.md)，用法见[使用指南](../releases/v0.5.0-usage.md)。
+阶段 `6F8270…` 和最终 `3C5AF9…` Windows 程序的正常原生复验分别记录，最终包通过扫描与样本复验；便携包、综合清单、桌面入口、GitHub 发布和实际附件回读均完成。0.4.0 证据保持原身份，不移记到本版。公开源码不含本地回执、签名材料或用户媒体；状态见[验证记录](../../VERIFICATION.md)，用法见[使用指南](../releases/v0.5.0-usage.md)。

@@ -4,7 +4,7 @@
 
 **[下载已发布版本](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [0.5.0 使用指南](docs/releases/v0.5.0-usage.md) · [English](README.en.md)
 
-**0.5.0 的 Windows EXE、便携包与 Android APK 已完成本地打包和原生样本验证，待 GitHub 附件上传回验。** Android 已实际完成 HTTP 暂停续传、重启恢复、小说下载与内置阅读。正式下载以上方 Releases 为准，验证范围见[0.5.0 使用指南](docs/releases/v0.5.0-usage.md)。
+**[0.5.0 已正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.0)**，提供 Windows EXE、便携 ZIP 与 Android APK。9 个附件均已实际下载回验，大小、SHA256 与 GitHub 摘要一致。Android 已实测 HTTP 暂停续传、重启恢复、小说下载与内置阅读；使用与验证范围见[指南](docs/releases/v0.5.0-usage.md)。
 
 ## 发现、收藏，再慢慢看
 
