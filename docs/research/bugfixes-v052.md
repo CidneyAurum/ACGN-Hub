@@ -1,6 +1,6 @@
 # 0.5.2：资源选择、初始化与请求生命周期
 
-当前为**本地验收及打包完成，待 GitHub 发布回验**。源码回归、最终双端身份、原生样本、资料保留、便携包与桌面入口均有独立证据；剩源码 / 标签及9附件上传后的实际下载回读。旧版结果不移记。
+**[0.5.2 已正式发布并通过附件回验](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.2)**。源码回归、最终双端身份、原生样本、资料保留、便携包及桌面入口均有独立证据，旧版结果不移记。
 
 本轮不做网络重构，不改变网络出口或处理地区 / 节点限制。此前用户已表示可能与节点有关，该访问问题不再作为本轮未完成故障追踪。
 
@@ -18,7 +18,9 @@ Android `apk-verification.json` 核对包名 `local.acgnhub.mobile`、0.5.2 / ve
 
 Windows `windows-native.json` 对应上表最终文件，构建和EXE / setup扫描通过；UIAutomation读取隔离旧资料库4条完成记录、小说7章第二章正文 / 滚动及39页漫画第2页，正常关闭退出0、无新增检测、无CDP / 注入。未重新下载原成品或启动用户原资料库，NSIS未实际安装。
 
-`data-preservation.json` 最后 `2026-11-02T04:11:36Z` passed，9表 / 3媒体 / 26旧EXE含0.5.1保持、完整性ok。便携ZIP **9,689,818字节**、SHA256 `CAF17C235FFEAB5365432465EE447307AC9C60411851C2721CE4D2E198BD7D78`，12白名单CRC / 哈希通过，无Data / 媒体；四产物清单 / 校验齐全。桌面0.5.2入口沿用原 `release/v0.3.2/Data` 并备份旧快捷方式，测试模拟器和Windows实例已关闭。指南已打包冻结，仅补GitHub回读。
+`data-preservation.json` 最后 `2026-11-02T04:16:48Z` passed，9表 / 3媒体 / 26旧EXE含0.5.1保持、完整性ok。便携ZIP **9,689,818字节**、SHA256 `CAF17C235FFEAB5365432465EE447307AC9C60411851C2721CE4D2E198BD7D78`，12白名单CRC / 哈希通过，无Data / 媒体。桌面0.5.2沿用原 `release/v0.3.2/Data`、备份旧快捷方式，测试实例已关闭，包内指南保持发布字节。
+
+正式发布 `2026-11-02T04:19:44Z`，`github-published-verification.json` 于04:19:46Z为passed、公开仓库、非草稿。9附件实际下载大小 / SHA256 / GitHub API摘要、12ZIP CRC / 成员哈希、APK回执 / 证书身份和所有校验一致，无Data。`v0.5.2`固定 `bea390067db29b62807920cc50752090be9d72d6`，核验当时HEAD / main / tag一致；随后main只补发布文档回执，不改tag、源码、包内指南或附件。
 
 原生未故意删除HTTP记录或放慢数据库来重现句柄 / 初始化问题，也未在真实设备做同事件双击及部分结果保存时停止等待；这些分别由单元和浏览器回归覆盖。当前原生验证不替代上述确定性自动测试，也不宣称支持持续后台下载、所有厂商WebView或NSIS实际安装。
 
@@ -45,4 +47,4 @@ Windows `windows-native.json` 对应上表最终文件，构建和EXE / setup扫
 - **Android句柄**：管理器单测覆盖不经poll直接resume、缺失时重建、取消不重复提交，以及权限 / 损坏 / 近似错误保留原句柄；不假装这些fixture是实际Android杀进程样本。
 - **本版完整回归**：`unit-final.json` 为71文件 / **743通过、0失败、success=true**；最终 `browser-delivery.json` **102通过**，先前 `browser-final.json` 的101项作为前一阶段保留、不相加。`windows-native-tests.log` 为 **118通过 / 2默认忽略 / 0失败**；Vue与E2E类型检查均退出0。源码、构建和原生结果分别记载。
 
-最终身份、原生样本、保留和本地打包已完成，GitHub源码 / 标签及9附件回验待做。使用步骤见[指南](../releases/v0.5.2-usage.md)，本地回执不随源码或附件上传。
+最终身份、原生、保留、打包与发布回验均完成，范围仍按独立证据记录。使用步骤见[指南](../releases/v0.5.2-usage.md)，本地回执不随源码或附件上传。

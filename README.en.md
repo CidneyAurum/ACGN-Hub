@@ -4,7 +4,7 @@ A library for anime, manga, light novels and visual novels on Windows and Androi
 
 **[Download released builds](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [中文](README.md) · [0.5.2 user guide, Chinese](docs/releases/v0.5.2-usage.md)
 
-**Version 0.5.2 has completed local verification and packaging and awaits GitHub release verification**, improving resource selection, library / source initialization, Android task recovery and JSON request lifecycles. See the [guide](docs/releases/v0.5.2-usage.md), in Chinese. Published [0.5.1](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.1) remains available. This release does not change network routing or remove node restrictions.
+**[Version 0.5.2 is released, with all nine assets downloaded and verified](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.2)**, improving resource selection, library / source initialization, Android task recovery and JSON request lifecycles. See the [guide](docs/releases/v0.5.2-usage.md), in Chinese. This release does not change network routing or remove node restrictions.
 
 ## Features
 
@@ -117,7 +117,7 @@ The default build includes arm64 and x86_64. Packaging copies verified native li
 
 ## Verification and credits
 
-Version 0.5.2 passes **743 frontend tests, all 102 browser tests and 118 Rust tests** (2 ignored), plus type checks. Final Windows samples read existing TXT / CBZ files and saved positions. The API35 Android emulator preserves collections / sources after upgrading, invalidates changed LNovel queries, opens a 20-volume list and downloads / reads a fresh first volume with chooser cancellation. Original 9 database tables, 3 media files and 26 older executables remain intact. Final delivery verification is pending; see the [verification record](VERIFICATION.md) for identities and scope. Complete game installation / launch is not verified. EPUB and PDF require external readers.
+Version 0.5.2 passes **743 frontend tests, all 102 browser tests and 118 Rust tests** (2 ignored), plus type checks. Final Windows samples read existing TXT / CBZ files and saved positions. The API35 Android emulator preserves collections / sources after upgrading, invalidates changed LNovel queries, opens a 20-volume list and downloads / reads a fresh first volume with chooser cancellation. Original 9 database tables, 3 media files and 26 older executables remain intact. All nine downloaded assets match their sizes, SHA256 hashes and GitHub digests, with portable ZIP and APK identities verified. See the [verification record](VERIFICATION.md) for scope. Complete game installation / launch is not verified. EPUB and PDF require external readers.
 
 See the [verification record](VERIFICATION.md), [0.5.0 guide](docs/releases/v0.5.0-usage.md), [released 0.4.0 guide](docs/releases/v0.4.0-usage.md), [archived README](HISTORY.md) and [third-party notices](THIRD_PARTY_NOTICES.md). The archive preserves historical wording and original path references.
 

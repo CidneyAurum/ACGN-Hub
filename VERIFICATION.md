@@ -1,8 +1,8 @@
 # ACGN Hub 验证记录
 
-## 最新增量：0.5.2 流程与生命周期（本地验收完成，待 GitHub 回验）
+## 最新增量：0.5.2 流程与生命周期（正式发布与附件回验完成）
 
-本版源码回归、最终双端原生样本、资料保留及打包通过，综合清单和桌面入口已完成；仅待GitHub源码 / 标签及9附件上传回读。本轮修复本地并发与请求生命周期，不做网络重构或处理节点限制。
+本版源码回归、最终双端原生样本、资料保留、打包和GitHub9附件实际回读完成，[0.5.2 已正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.2)。本轮修复本地并发与请求生命周期，不做网络重构或处理节点限制。
 
 | 检查 | 当前结果与边界 |
 | --- | --- |
@@ -15,9 +15,11 @@
 | 最终APK | **54,972,998字节**，SHA256 `F446795A6F3A78480DE3B115B852014F9D2ABB617817A2F58DAC681FFB08F437`；0.5.2 / 5002、min26 / target36、双64位ABI，签名 / CRC /16KiB对齐通过，证书沿用，无用户资料 / 私钥 |
 | Android原生 | `android-native.json` 22证据范围内通过：API35 x86_64升级保留收藏1，设置显示13来源 / 1启用；LNovel88→99无旧选择→88进入20卷，新卷1 10 / 10、第二章全屏正文、`verified-export-chooser.*` 真实选择器取消，普通reader重开第二章；同PID4197 HOT124ms、无该PID崩溃。句柄删除 / 慢IO / 双击及停止等待竞态为自动测试范围，不冒充原生实测 |
 | Windows原生 | `windows-native.json`：EXE **25,972,224字节**、`DA6A55FB0250AED1652114D2BE35B9844FFE18467826CFB1459840DC1A4C286A`；setup **7,314,564字节**、`7C5DBB58991E19F473D2B2588BF6328D2125C31A1F5BB7913F4B7306F48A5819`，构建扫描 / UIAutomation TXT+CBZ / 正常退出0通过，无新增检测；未重下原文件、未安装setup |
-| 资料保留 | `data-preservation.json` 最后 `2026-11-02T04:11:36Z` passed，9表 / 3媒体 / 26旧EXE含0.5.1保持，完整性ok |
+| 资料保留 | `data-preservation.json` 最后 `2026-11-02T04:20:33Z` passed，9表 / 3媒体 / 26旧EXE含0.5.1保持，完整性ok |
 | 便携 / 入口 | `portable.json`：**9,689,818字节**，SHA256 `CAF17C235FFEAB5365432465EE447307AC9C60411851C2721CE4D2E198BD7D78`，12白名单CRC / 哈希，无Data；四产物清单 / 校验齐全。桌面0.5.2沿用canonical032Data、旧快捷方式备份，测试模拟器 / Windows已关闭 |
-| 本版待验 | 仅GitHub源码 / 标签及9附件上传摘要、实际下载哈希 / 大小及远端身份核对。旧版结果不移记 |
+| GitHub回验 | `.work/v052-evidence/github-published-verification.json` 于 `2026-11-02T04:19:46Z` **passed=true**，公开仓库、非草稿；9附件实际下载大小 / SHA256 / API摘要一致、12ZIP CRC / 成员哈希、APK回执 / 签名身份与两套校验通过，无Data |
+| 正式身份 | 发布 `2026-11-02T04:19:44Z`，`v0.5.2`固定 `bea390067db29b62807920cc50752090be9d72d6`，核验当时HEAD / main / tag一致；随后main仅补发布文档回执，不移动tag、不改源码、包内指南或附件 |
+| 最终汇总 | `verification-final.json` 8项 **allChecksPassed=true**；`downloaded-apk-verification.json` 对实际下载APK用SDK重验v2 / v3签名与16KiB对齐通过，SHA256仍为 `F44679…8F437`。测试应用和模拟器均已结束，无测试进程残留 |
 
 详见[0.5.2 修复记录](docs/research/bugfixes-v052.md)及[使用指南](docs/releases/v0.5.2-usage.md)。JSON取消结束前端等待，native剩余工作仍由其超时约束，未宣称强行终止所有系统请求。
 

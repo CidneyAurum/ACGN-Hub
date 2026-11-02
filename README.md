@@ -4,7 +4,7 @@
 
 **[下载已发布版本](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [0.5.2 使用指南](docs/releases/v0.5.2-usage.md) · [English](README.en.md)
 
-**0.5.2 本地验收和打包完成，待 GitHub 发布回验**，改进资源选择、收藏 / 来源初始化、Android任务恢复与JSON生命周期；见[指南](docs/releases/v0.5.2-usage.md)。已发布的 [0.5.1](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.1) 继续可用，本版不重构网络出口或处理节点限制。
+**[0.5.2 已正式发布，9 个附件下载回验通过](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.2)**，改进资源选择、收藏 / 来源初始化、Android任务恢复与JSON生命周期；见[指南](docs/releases/v0.5.2-usage.md)。本版不重构网络出口或处理节点限制。
 
 ## 发现、收藏，再慢慢看
 
@@ -147,7 +147,7 @@ powershell -NoProfile -File .\src-tauri\scripts\build-android.ps1 -Action build
 
 ## 验证与文档
 
-0.5.2通过 **743单测、102完整浏览器、118 Rust**（2默认忽略）及类型检查。最终Windows实测TXT / CBZ内读与已有进度；API35 Android升级保留收藏和来源，真实LNovel候选改词失效、20卷详情、新卷1下载 / 内读 / 选择器取消通过。原9表、3媒体、26旧EXE保持，最终交付待回验。身份与未覆盖范围见[验证记录](VERIFICATION.md)；完整Galgame安装运行未验收，EPUB / PDF使用外部阅读器。
+0.5.2通过 **743单测、102完整浏览器、118 Rust**（2默认忽略）及类型检查。最终Windows实测TXT / CBZ内读与已有进度；API35 Android升级保留收藏和来源，真实LNovel候选改词失效、20卷详情、新卷1下载 / 内读 / 选择器取消通过。原9表、3媒体、26旧EXE保持，9附件大小 / SHA256 / GitHub摘要及便携包 / APK身份回验一致。身份与未覆盖范围见[验证记录](VERIFICATION.md)；完整Galgame安装运行未验收，EPUB / PDF使用外部阅读器。
 
 | 文档 | 内容 |
 | --- | --- |
