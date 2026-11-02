@@ -26,6 +26,16 @@ const DEFAULT_SOURCE_TIMESTAMP = "2026-08-17T00:00:00.000Z";
 
 export const DEFAULT_RESOURCE_SOURCE_CONFIGS: readonly SourceConfig[] = [
   {
+    id: "builtin:itch-freeware", type: "itch_freeware", name: "itch.io · 官方免费精选",
+    url: "https://itch.io", enabled: false,
+    createdAt: "2026-11-02T00:00:00.000Z", updatedAt: "2026-11-02T00:00:00.000Z",
+  },
+  {
+    id: "builtin:wenku8-epub", type: "wenku8_epub", name: "Wenku8 · 插图 EPUB",
+    url: "https://raw.githubusercontent.com/mojimoon/wenku8/main", enabled: false,
+    createdAt: "2026-11-02T00:00:00.000Z", updatedAt: "2026-11-02T00:00:00.000Z",
+  },
+  {
     id: "builtin:shinnku", type: "shinnku", name: "真红小站 · 游戏文件",
     url: "https://www.shinnku.com", enabled: false,
     createdAt: "2026-10-31T00:00:00.000Z", updatedAt: "2026-10-31T00:00:00.000Z",

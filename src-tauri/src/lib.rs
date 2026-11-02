@@ -12,6 +12,8 @@ mod diagnostics;
 mod downloaded_media;
 mod image_format;
 mod local_viewer;
+mod epub_reader;
+mod itch_freeware;
 mod manga_downloads;
 mod media_images;
 mod mobile_http;
@@ -102,6 +104,7 @@ async fn metadata_json_request(
         Some("api.bgm.tv")
             | Some("api.vndb.org")
             | Some("api.github.com")
+            | Some("raw.githubusercontent.com")
             | Some("www.kungal.com")
             | Some("shionlib.com")
             | Some("api.mangacopy.com")
@@ -132,6 +135,13 @@ async fn metadata_json_request(
             || request_method != reqwest::Method::GET)
     {
         return Err("Bilibili 元数据代理仅支持公开投稿搜索 GET 接口".to_string());
+    }
+    if parsed.host_str() == Some("raw.githubusercontent.com")
+        && (parsed.path() != "/mojimoon/wenku8/main/out/epub_index.json"
+            || parsed.query().is_some()
+            || request_method != reqwest::Method::GET)
+    {
+        return Err("轻小说归档仅支持公开 EPUB 目录 GET 接口".to_string());
     }
 
     let timeout = timeout_ms.unwrap_or(10_000).clamp(500, 35_000);
@@ -1546,6 +1556,7 @@ pub fn run() {
             copymanga_login,
             jmcomic_bridge,
             feed_text_request,
+            itch_freeware::itch_freeware_request,
             download_manga_images,
             write_text_file,
             create_cbz,

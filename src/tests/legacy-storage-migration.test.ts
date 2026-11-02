@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { createLegacyStorageMigrator, detectLegacyStorageImport, LEGACY_STORAGE_KEYS, type LegacyExistingRecords, type LegacyMigrationDriver, type LegacyStorage } from "@/infrastructure/database/legacy-storage-migration";
+import { SOURCE_CONFIG_TYPES, isRetiredSourceType } from "@/domain/source";
 
 const date = "2026-10-29T08:00:00.000Z";
 const media = { id: "bangumi:7", type: "anime", title: "测试'); DROP TABLE media; --", aliases: ["Test"], externalIds: [{ provider: "bangumi", value: "7" }], metadata: { score: 8 }, releaseYear: 2026 };
@@ -55,6 +56,15 @@ describe("legacy storage migration on isolated SQLite", () => {
         } catch (cause) { db.exec("ROLLBACK"); throw cause; }
       },
     };
+  });
+  it("recognizes every current source adapter when importing a legacy profile", async () => {
+    const configs = SOURCE_CONFIG_TYPES.filter((type) => !isRetiredSourceType(type)).map((type) => ({ ...source, id: type, type }));
+    storage.setItem(LEGACY_STORAGE_KEYS.sources, JSON.stringify(configs));
+    const migrator = createLegacyStorageMigrator(storage, driver);
+    const preview = await migrator.preview();
+    expect(preview.categories.find((category) => category.kind === "sources")).toMatchObject({ valid: configs.length, invalid: 0, importable: configs.length });
+    await migrator.import(preview);
+    expect(all<Array<{ source_id: string }>>("SELECT source_id FROM source_configs").map((row) => row.source_id).sort()).toEqual(configs.map((config) => config.id).sort());
   });
   afterEach(() => db.close());
 

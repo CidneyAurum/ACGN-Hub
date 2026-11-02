@@ -11,6 +11,7 @@ import { emitDownloadCompleted } from "@/application/download-events";
 import { automaticNameEligible, previewCompletedName, type CompletedNamePreview } from "@/application/completed-download-naming";
 import { createMediaLibraryRepository } from "@/infrastructure/library/create-media-library-repository";
 import { createResourceRepository } from "@/infrastructure/database/create-resource-repository";
+import { requiresFreshSourceTarget, resolveSourceDownloadTarget } from "@/application/refreshable-source-download";
 
 export const useDownloadStore = defineStore("downloads", () => {
   const tasks = ref<DownloadTask[]>([]);
@@ -45,6 +46,8 @@ export const useDownloadStore = defineStore("downloads", () => {
         },
         settings: loadSettings,
         onChange: (next) => { tasks.value = next; },
+        requiresFreshTarget: requiresFreshSourceTarget,
+        resolveTarget: resolveSourceDownloadTarget,
         onComplete: (task) => { void automaticallyName(task).finally(() => emitDownloadCompleted(tasks.value.find((item) => item.id === task.id) ?? task)); },
       });
       await candidate.initialize();
@@ -65,8 +68,8 @@ export const useDownloadStore = defineStore("downloads", () => {
       return result;
     } catch (cause) { error.value = errorMessage(cause); throw cause; }
   }
-  const add = (url: string, directory: string, association: { mediaId?: string; resourceId?: string; sourceName?: string; filename?: string } = {}) =>
-    useManager((value) => value.add(url, directory, association));
+  const add = (url: string, directory: string, association: { mediaId?: string; resourceId?: string; sourceName?: string; filename?: string } = {}, beforeCreate?: () => Promise<void>) =>
+    useManager((value) => value.add(url, directory, association, beforeCreate));
   const refreshAll = () => useManager((value) => value.refreshAll());
   const pause = (task: DownloadTask) => useManager((value) => value.pause(task.id));
   const resume = (task: DownloadTask) => useManager((value) => value.resume(task.id));

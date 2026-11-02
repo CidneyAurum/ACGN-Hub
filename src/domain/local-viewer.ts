@@ -1,6 +1,7 @@
 import type { DownloadTask } from "./download";
 import { getCompletedDownloadOutputs } from "./download-output";
 import type { LocalDownloadTask } from "./local-download";
+import type { EpubDocument } from "./novel-reader";
 
 export type LocalViewerKind = "comic" | "video" | "text";
 
@@ -19,11 +20,12 @@ export interface LocalViewerSession {
   sizeBytes: number;
   modifiedAt: string;
   text?: string;
+  epub?: EpubDocument;
 }
 
 export function getLocalViewerKind(path: string): LocalViewerKind | undefined {
   if (/\.cbz$/i.test(path)) return "comic";
-  if (/\.txt$/i.test(path)) return "text";
+  if (/\.(?:txt|epub)$/i.test(path)) return "text";
   if (/\.(?:mp4|mkv|webm|m4v|mov|avi|ts)$/i.test(path)) return "video";
   return undefined;
 }

@@ -33,7 +33,7 @@ qBittorrent、Python、yt-dlp、FFmpeg / imageio-ffmpeg、jmcomic 是用户本�
 
 ## 作品数据与参考素材
 
-Bangumi、VNDB、MangaDex、KUN Galgame、LNovel、真红小站、ShionLib 等仅通过公开接口或网页访问资料，不把服务端实现复制为本项目代码。作品封面、简介、翻译和站点内容属于各自权利人，不是 ACGN Hub 自有资产。接口接入和 TXT 输出均不改变作者与平台的内容归属。
+Bangumi、VNDB、MangaDex、KUN Galgame、LNovel、真红小站、ShionLib、Wenku8 社区 EPUB 目录及 itch.io 作者免费发布页等仅通过公开接口或网页访问资料，不把服务端实现复制为本项目代码。Wenku8 目录的来源项目为 [mojimoon/wenku8](https://github.com/mojimoon/wenku8)；itch.io 精选文件由各作品作者在官网发布，免费本体与付费附件分开处理。作品封面、简介、翻译和站点内容属于各自权利人，不是 ACGN Hub 自有资产。接口接入及 TXT / EPUB 下载均不改变作者与平台的内容归属。
 
 当前暖粉紫电视 SVG、奶白屏幕与轻微笑脸标识，以及图标生成代码由本项目绘制，无人物或 AI 图像。其他产品的设计研究截图仅作研究引用，应按研究文档保留出处，不能作为本产品品牌图像。
 
@@ -546,3 +546,31 @@ PackageDownloadLocation: git+https://github.com/tauri-apps/tauri.git
 PackageDownloadLocation: git+ssh://github.com/tauri-apps/tauri.git
 Creator: Person: Daniel Thompson-Yvetot
 ````
+
+### quick-xml 0.41.0
+
+EPUB XML parsing uses the MIT-licensed quick-xml crate. Source: https://github.com/tafia/quick-xml/tree/v0.41.0
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Johann Tuffe
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.

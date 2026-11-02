@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DownloadManager } from "@/application/download-manager";
+import { DownloadManager, type DownloadManagerDependencies } from "@/application/download-manager";
 import type { DownloadEngine, TaskRepository } from "@/application/ports";
 import type { DownloadStatus, DownloadTask } from "@/domain/download";
 import { getCompletedDownloadFiles, getCompletedDownloadOutputs } from "@/domain/download-output";
@@ -12,7 +12,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: nativeInvoke }));
 function task(overrides: Partial<DownloadTask> = {}): DownloadTask {
   return { id: "one", engineId: "aria2", sourceUrl: "https://example.org/one.zip", protocol: "http", directory: "C:\\Downloads", state: "queued", totalBytes: 0, completedBytes: 0, speedBytesPerSecond: 0, files: [], dedupeKey: "one", createdAt: "2026-10-01", updatedAt: "2026-10-01", ...overrides };
 }
-function fixture(initial: DownloadTask[] = [], slots = 1) {
+function fixture(initial: DownloadTask[] = [], slots = 1, overrides: Partial<Pick<DownloadManagerDependencies, "resolveTarget" | "requiresFreshTarget">> = {}) {
   let persisted = structuredClone(initial);
   let tasks: DownloadTask[] = [];
   const repository: TaskRepository = {
@@ -27,12 +27,56 @@ function fixture(initial: DownloadTask[] = [], slots = 1) {
   const resolve = vi.fn((_id: string, _endpoint?: string) => engine);
   const completed = vi.fn();
   const settings: { maxConcurrentDownloads: number; speedLimitBytesPerSecond: number; aria2Endpoint?: string; httpDownloadEngine?: "aria2" | "mobile_http" } = { maxConcurrentDownloads: slots, speedLimitBytesPerSecond: 0 };
-  const manager = new DownloadManager({ repository, engine: resolve, settings: () => settings, onChange: (next) => { tasks = next; }, onComplete: completed });
+  const manager = new DownloadManager({ repository, engine: resolve, settings: () => settings, onChange: (next) => { tasks = next; }, onComplete: completed, ...overrides });
   return { manager, engine, repository, resolve, completed, settings, tasks: () => tasks };
 }
 
 describe("download task lifecycle", () => {
   afterEach(() => vi.unstubAllGlobals());
+  it("publishes source association after dedupe and before resolving without changing it on a duplicate", async () => {
+    let owner = "";
+    const resolveTarget = vi.fn(async () => {
+      expect(owner).toBe("first-work");
+      return { protocol: "http" as const, url: "https://cdn.example/file.zip?expires=now" };
+    });
+    const f = fixture([], 1, { resolveTarget });
+    const stable = "https://official.example/game?acgn_upload=12";
+    const before = vi.fn(async () => { owner = "first-work"; });
+    await f.manager.add(stable, "C:\\Downloads", { mediaId: "first-work" }, before);
+    const duplicate = vi.fn(async () => { owner = "second-work"; });
+    await expect(f.manager.add(stable, "C:\\Downloads", { mediaId: "second-work" }, duplicate)).rejects.toThrow("已有下载任务");
+    expect(before).toHaveBeenCalledTimes(1);
+    expect(duplicate).not.toHaveBeenCalled();
+    expect(owner).toBe("first-work");
+    expect(resolveTarget).toHaveBeenCalledTimes(1);
+  });
+  it("resolves temporary file links only when starting and retains the stable source identity through failed retry", async () => {
+    const stable = "https://official.example/free-game?acgn_upload=12";
+    const resolveTarget = vi.fn<NonNullable<DownloadManagerDependencies["resolveTarget"]>>()
+      .mockResolvedValueOnce({ protocol: "http", url: "https://cdn.example/file.zip?expires=first" })
+      .mockResolvedValueOnce({ protocol: "http", url: "https://cdn.example/file.zip?expires=second" });
+    const f = fixture([task({ sourceUrl: stable, engineId: "mobile_http", resourceId: "itch_freeware:game:12" })], 1,
+      { resolveTarget, requiresFreshTarget: () => true });
+    f.settings.httpDownloadEngine = "mobile_http";
+    await f.manager.refreshAll();
+    expect(f.engine.add).toHaveBeenCalledWith(expect.objectContaining({ url: "https://cdn.example/file.zip?expires=first" }), expect.anything());
+    expect(f.tasks()[0].sourceUrl).toBe(stable);
+    vi.mocked(f.engine.status).mockResolvedValueOnce({ state: "failed", totalBytes: 100, completedBytes: 10, speedBytesPerSecond: 0, files: [], error: "HTTP 403" });
+    await f.manager.refreshAll();
+    await f.manager.retry("one");
+    expect(f.engine.cancel).toHaveBeenCalledWith("remote-one");
+    expect(f.engine.add).toHaveBeenLastCalledWith(expect.objectContaining({ url: "https://cdn.example/file.zip?expires=second" }), expect.anything());
+    expect((await f.repository.findById("one"))?.sourceUrl).toBe(stable);
+    expect(resolveTarget).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not send a landing page to the engine if refreshing the source-owned link fails", async () => {
+    const f = fixture([task({ sourceUrl: "https://official.example/game", resourceId: "itch_freeware:game:12" })], 1,
+      { resolveTarget: async () => { throw new Error("来源已撤下该文件"); } });
+    await f.manager.refreshAll();
+    expect(f.engine.add).not.toHaveBeenCalled();
+    expect(f.tasks()[0]).toMatchObject({ state: "failed", error: "来源已撤下该文件" });
+  });
   it("persists the native canonical directory so Android completed files remain readable and exportable", async () => {
     const declared = "/data/user/0/local.acgnhub.mobile/files/Files/Incoming";
     const canonical = "/data/data/local.acgnhub.mobile/files/Files/Incoming";

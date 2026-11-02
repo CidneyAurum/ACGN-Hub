@@ -12,6 +12,8 @@ import { MangaDexSourceProvider } from "./mangadex-source-provider";
 import { MangabzSourceProvider } from "./mangabz-source-provider";
 import { InternetArchiveSourceProvider } from "./internet-archive-source-provider";
 import { LNovelSourceProvider } from "./lnovel-source-provider";
+import { Wenku8EpubSourceProvider } from "./wenku8-source-provider";
+import { ItchFreewareSourceProvider } from "./itch-freeware-source-provider";
 import { PublicVideoSourceProvider } from "./public-video-source-provider";
 import type { ResourceItem } from "@/domain/resource";
 
@@ -30,6 +32,8 @@ export function createSourceProvider(config: SourceConfig, storedResources: Reso
     case "mangabz": provider = new MangabzSourceProvider(config.url); break;
     case "archive": provider = new InternetArchiveSourceProvider(config.url); break;
     case "lnovel": provider = new LNovelSourceProvider(config.url); break;
+    case "wenku8_epub": provider = new Wenku8EpubSourceProvider(config.url); break;
+    case "itch_freeware": provider = new ItchFreewareSourceProvider(config.url); break;
     case "rss":
     case "nyaa":
     case "anime_garden": provider = new RssSourceProvider(config.url); break;

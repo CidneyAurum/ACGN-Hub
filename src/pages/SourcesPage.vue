@@ -65,6 +65,8 @@ watch(type, (value) => {
     shinnku: { url: "https://www.shinnku.com", name: "真红小站 · 游戏文件" },
     shionlib: { url: "https://shionlib.com", name: "ShionLib · 游戏资源库" },
     lnovel: { url: "https://lnovel.animes.garden", name: "LNovel 中文轻小说" },
+    wenku8_epub: { url: "https://raw.githubusercontent.com/mojimoon/wenku8/main", name: "Wenku8 · 插图 EPUB" },
+    itch_freeware: { url: "https://itch.io", name: "itch.io · 官方免费精选" },
   };
   if (defaults[value]) { url.value = defaults[value].url; if (!name.value.trim()) name.value = defaults[value].name; }
   if (value === "public_video") {
@@ -110,6 +112,8 @@ function sourceTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     rss: "RSS/Atom",
     lnovel: "LNovel",
+    wenku8_epub: "Wenku8 EPUB",
+    itch_freeware: "itch.io 官方免费精选",
     mangadex: "MangaDex",
     mangabz: "MangaBZ · 中文",
     archive: "Internet Archive",
@@ -161,7 +165,7 @@ async function addSource(): Promise<void> {
   try {
     if (type.value === "rss") {
       if (!isHttpUrl(sourceUrl)) throw new Error("RSS 来源必须是不带认证信息的 HTTP/HTTPS 地址");
-    } else if (["public_video", "mangabz", "vndb_release", "shinnku", "shionlib"].includes(type.value)) {
+    } else if (["public_video", "mangabz", "vndb_release", "shinnku", "shionlib", "wenku8_epub", "itch_freeware"].includes(type.value)) {
       createSourceProvider({ id: "validation", type: type.value, name: sourceName, url: sourceUrl, enabled: false, createdAt: "", updatedAt: "" });
     } else if (type.value === "github_release") {
       parseGithubRepositoryUrl(sourceUrl);
@@ -442,8 +446,8 @@ async function checkInBrowser(config: SourceConfig): Promise<void> {
   <section class="card">
     <form class="source-form" @submit.prevent="addSource">
       <label><span>来源名称</span><input v-model="name" type="text" placeholder="例如：我的更新源" required /></label>
-      <label><span>来源类型</span><select v-model="type"><option value="rss">RSS / Atom（附件 / 磁力 / 种子）</option><option value="public_video">B站公开投稿（MP4）</option><option value="lnovel">LNovel 中文轻小说</option><option value="mangadex">MangaDex 漫画</option><option value="mangabz">MangaBZ · 中文日漫</option><option value="archive">Internet Archive</option><option value="copymanga">拷贝漫画</option><option value="shinnku">真红小站 · 游戏文件</option><option value="shionlib">ShionLib · 游戏资源库</option><option value="kungal">鲲 Galgame</option><option value="vndb_release">VNDB 官方发行与试玩</option><option value="jmcomic" :disabled="!!sourcePlatformUnavailableReason('jmcomic')">JMComic（电脑端 Python）</option><option value="github_release">GitHub Releases</option></select></label>
-      <label><span>{{ type === "mangabz" ? "MangaBZ 网站地址" : type === "public_video" ? "B站公开投稿来源地址" : type === "github_release" ? "GitHub 仓库地址" : type === "lnovel" ? "LNovel API 地址" : type === "mangadex" ? "MangaDex API 地址" : type === "archive" ? "Internet Archive 地址" : type === "copymanga" ? "拷贝漫画 API 地址" : type === "kungal" ? "鲲 Galgame 地址" : type === "shinnku" ? "真红小站地址" : type === "shionlib" ? "ShionLib 地址" : type === "vndb_release" ? "VNDB API 地址" : type === "jmcomic" ? "JMComic 地址" : "RSS/Atom 地址" }}</span><input v-model="url" type="url" :placeholder="type === 'mangabz' ? 'https://mangabz.com' : type === 'public_video' ? 'https://www.bilibili.com' : type === 'github_release' ? 'https://github.com/owner/repo' : type === 'lnovel' ? 'https://lnovel.animes.garden' : type === 'mangadex' ? 'https://api.mangadex.org' : type === 'archive' ? 'https://archive.org' : type === 'copymanga' ? 'https://mapi.hotmangasg.com' : type === 'kungal' ? 'https://www.kungal.com' : type === 'shinnku' ? 'https://www.shinnku.com' : type === 'shionlib' ? 'https://shionlib.com' : type === 'vndb_release' ? 'https://api.vndb.org/kana' : type === 'jmcomic' ? 'python://jmcomic' : 'https://example.com/feed.xml'" required /></label>
+      <label><span>来源类型</span><select v-model="type"><option value="rss">RSS / Atom（附件 / 磁力 / 种子）</option><option value="public_video">B站公开投稿（MP4）</option><option value="wenku8_epub">Wenku8 · 插图 EPUB</option><option value="lnovel">LNovel 中文轻小说</option><option value="mangadex">MangaDex 漫画</option><option value="mangabz">MangaBZ · 中文日漫</option><option value="archive">Internet Archive</option><option value="copymanga">拷贝漫画</option><option value="itch_freeware">itch.io · 官方免费精选</option><option value="shinnku">真红小站 · 游戏文件</option><option value="shionlib">ShionLib · 游戏资源库</option><option value="kungal">鲲 Galgame</option><option value="vndb_release">VNDB 官方发行与试玩</option><option value="jmcomic" :disabled="!!sourcePlatformUnavailableReason('jmcomic')">JMComic（电脑端 Python）</option><option value="github_release">GitHub Releases</option></select></label>
+      <label><span>{{ type === "mangabz" ? "MangaBZ 网站地址" : type === "public_video" ? "B站公开投稿来源地址" : type === "github_release" ? "GitHub 仓库地址" : type === "wenku8_epub" ? "EPUB 公开目录地址" : type === "lnovel" ? "LNovel API 地址" : type === "mangadex" ? "MangaDex API 地址" : type === "archive" ? "Internet Archive 地址" : type === "copymanga" ? "拷贝漫画 API 地址" : type === "kungal" ? "鲲 Galgame 地址" : type === "itch_freeware" ? "itch.io 官网地址" : type === "shinnku" ? "真红小站地址" : type === "shionlib" ? "ShionLib 地址" : type === "vndb_release" ? "VNDB API 地址" : type === "jmcomic" ? "JMComic 地址" : "RSS/Atom 地址" }}</span><input v-model="url" type="url" :placeholder="type === 'mangabz' ? 'https://mangabz.com' : type === 'public_video' ? 'https://www.bilibili.com' : type === 'github_release' ? 'https://github.com/owner/repo' : type === 'wenku8_epub' ? 'https://raw.githubusercontent.com/mojimoon/wenku8/main' : type === 'lnovel' ? 'https://lnovel.animes.garden' : type === 'mangadex' ? 'https://api.mangadex.org' : type === 'archive' ? 'https://archive.org' : type === 'copymanga' ? 'https://mapi.hotmangasg.com' : type === 'kungal' ? 'https://www.kungal.com' : type === 'itch_freeware' ? 'https://itch.io' : type === 'shinnku' ? 'https://www.shinnku.com' : type === 'shionlib' ? 'https://shionlib.com' : type === 'vndb_release' ? 'https://api.vndb.org/kana' : type === 'jmcomic' ? 'python://jmcomic' : 'https://example.com/feed.xml'" required /></label>
       <label v-if="type === 'copymanga'"><span>拷贝漫画 Token（可选）</span><input v-model="token" type="password" placeholder="公开章节无需填写；受限章节再粘贴 Token" autocomplete="off" /></label>
       <button class="primary-button" type="submit">添加来源</button>
     </form>

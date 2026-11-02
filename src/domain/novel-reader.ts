@@ -1,6 +1,23 @@
-export interface NovelBlock { id: string; text: string; heading: boolean; chapterIndex?: number }
+export interface NovelBlock { id: string; text: string; heading: boolean; chapterIndex?: number; imageIndex?: number }
 export interface NovelChapter { id: string; title: string; blockIndex: number }
 export interface ParsedNovel { blocks: NovelBlock[]; chapters: NovelChapter[]; structured: boolean }
+
+/** Native EPUB parser returns plain text and image indices, never executable markup. */
+export interface EpubDocument {
+  blocks: Array<{ text: string; heading: boolean; imageIndex?: number }>;
+  chapters: Array<{ title: string; blockIndex: number }>;
+  imageCount: number;
+}
+
+export function parseEpubDocument(document: EpubDocument): ParsedNovel {
+  const blocks: NovelBlock[] = document.blocks.map((block, index) => ({ ...block, id: `novel-block-${index}` }));
+  const chapters = document.chapters.map((chapter, index) => {
+    const block = blocks[chapter.blockIndex];
+    block.chapterIndex = index;
+    return { id: block.id, title: chapter.title, blockIndex: chapter.blockIndex };
+  });
+  return { blocks, chapters, structured: chapters.length > 0 };
+}
 
 const HEADING = /^(?:(?:第[零〇一二三四五六七八九十百千万两\d]+[章节卷回幕部篇话](?:[\s　:：、.．-].{0,70})?)|(?:序章|序言|前言|楔子|引子|终章|終章|尾声|尾聲|后记|後記|结语|結語|番外|附录|附錄)(?:[\s　:：、.．-].{0,70})?|(?:prologue|epilogue|chapter\s+\d+(?:[\s:.-].{0,70})?))$/i;
 

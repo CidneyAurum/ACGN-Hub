@@ -398,8 +398,8 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
     if (!resourceRepository) await initializeResourceRepository();
     if (!resourceRepository) throw new Error("资源记录存储尚未就绪");
     // A rejected duplicate must not replace the original work's association.
-    const deferGameAssociation = targetMedia.type === "visual_novel";
-    if (!deferGameAssociation) await resourceRepository.upsert(associatedResource);
+    const deferFileAssociation = targetMedia.type === "visual_novel" || resource.format?.toLowerCase() === "epub";
+    if (!deferFileAssociation) await resourceRepository.upsert(associatedResource);
     const settings = loadSettings();
     if (resource.metadata.downloadMode === "public_video") {
       const outputRoot = settings.libraryDirectory;
@@ -518,16 +518,22 @@ async function addResource(resource: ResourceItem): Promise<boolean> {
       if (generation === loadGeneration) { resourceNotice.value = `已生成 CBZ：${outputPath}`; completedLocalTaskId.value = localTaskId; }
       return true;
     }
-    const target = provider ? await provider.resolve(resource.id) : parseDownloadTarget(resource.targetUrl);
-    const configuredDirectory = settings.downloadDirectory || settings.incomingDirectory;
+    const target = resource.metadata.needsFreshDownloadTarget === true ? parseDownloadTarget(resource.targetUrl)
+      : provider ? await provider.resolve(resource.id) : parseDownloadTarget(resource.targetUrl);
+    const isEpub = targetMedia.type === "novel" && resource.format?.toLowerCase() === "epub";
+    const configuredDirectory = isEpub ? settings.obsidianEbookDirectory : settings.downloadDirectory || settings.incomingDirectory;
     const friendlyName = sanitizeFileName(resource.title, "未命名资源");
     const directory = targetMedia.type === "visual_novel" ? await galgameDownloadDirectory(configuredDirectory, resource, targetMedia.title) : configuredDirectory;
     const extension = target.filename?.match(/\.[a-z0-9]{2,8}$/i)?.[0] ?? "";
+    const epubName = metadataString(resource, "downloadFileName") || target.filename || `${friendlyName}.epub`;
     const filename = targetMedia.type === "visual_novel" && target.protocol === "http"
-      ? galgameDownloadFileName(resource, target.filename) : isAndroidRuntime() ? sanitizeMobileFileName(resource.title + extension, "未命名资源") : `${friendlyName}${extension}`;
-    await downloadStore.add(target.url, directory, { mediaId: targetMedia.id, resourceId: resource.id, sourceName: sourceConfig?.name, filename });
+      ? galgameDownloadFileName(resource, target.filename) : isEpub ? isAndroidRuntime() ? sanitizeMobileFileName(epubName) : sanitizeFileName(epubName)
+        : isAndroidRuntime() ? sanitizeMobileFileName(resource.title + extension, "未命名资源") : `${friendlyName}${extension}`;
+    const persistBeforeStart = resource.metadata.needsFreshDownloadTarget === true;
+    await downloadStore.add(target.url, directory, { mediaId: targetMedia.id, resourceId: resource.id, sourceName: sourceConfig?.name, filename },
+      persistBeforeStart ? () => resourceRepository!.upsert(associatedResource) : undefined);
     let associationWarning = "";
-    if (deferGameAssociation) {
+    if (deferFileAssociation && !persistBeforeStart) {
       try { await resourceRepository.upsert(associatedResource); }
       catch { associationWarning = "下载已加入，但作品资源关联未能保存。请到下载中心查看任务，避免重复添加。"; }
     }

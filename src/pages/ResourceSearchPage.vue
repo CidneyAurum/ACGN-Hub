@@ -40,7 +40,7 @@ const types: Array<{ value: MediaType; label: string }> = [
   { value: "novel", label: "小说" }, { value: "visual_novel", label: "Galgame" },
 ];
 const categorySources = computed(() => [...sources.configs, ...DEFAULT_RESOURCE_SOURCE_CONFIGS.filter((preset) =>
-  (preset.type === "vndb_release" || sourceSupportsType(preset, "visual_novel") && preset.type !== "rss" || preset.type === "lnovel") &&
+  (preset.type === "vndb_release" || sourceSupportsType(preset, "visual_novel") && preset.type !== "rss" || ["lnovel", "wenku8_epub"].includes(preset.type)) &&
   !sources.configs.some((config) => config.id === preset.id || config.type === preset.type && config.url.replace(/\/+$/, "") === preset.url.replace(/\/+$/, "")))].filter((config) => sourceSupportsType(config, type.value))
   .sort((left, right) => Number(right.enabled) - Number(left.enabled) || getSourcePriority(left, type.value) - getSourcePriority(right, type.value)));
 const compatibleSources = computed(() => filterSourcesForPlatform(categorySources.value));
@@ -201,7 +201,7 @@ async function selectWork(choice: SourceCandidate): Promise<void> {
     const rawDescription = candidate.raw?.description;
     const media: Media = {
       id: `source:${config.id}:${candidate.sourceItemId}`, type: selectedType, title: candidate.title,
-      aliases: [...new Set([selectedKeyword, candidate.title, ...(candidate.aliases ?? [])].filter(Boolean))],
+      aliases: [...new Set([candidate.title, ...(candidate.aliases ?? [])].filter(Boolean))],
       externalIds: [], metadata: { sourceConfigId: config.id, sourceItemId: candidate.sourceItemId,
         ...(candidate.raw?.authors ? { sourceAuthors: candidate.raw.authors } : {}),
         ...(candidate.raw?.editionLabel ? { sourceEdition: candidate.raw.editionLabel } : {}),

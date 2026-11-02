@@ -49,6 +49,25 @@ describe("native local viewer service", () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 
+  it("accepts native EPUB blocks and rejects invalid chapters or image references while revoking the session", async () => {
+    const epub = { blocks: [{ text: "序章", heading: true }, { text: "正文 <script>literal</script>", heading: false }, { text: "原书插图", heading: false, imageIndex: 0 }], chapters: [{ title: "序章", blockIndex: 0 }], imageCount: 1 };
+    const native = { ...comic, kind: "text", pageCount: null, text: null, epub };
+    const epubTarget = { ...target, kind: "text" as const, path: "D:\\Books\\volume.epub" };
+    invoke.mockResolvedValueOnce(native);
+    await expect(prepareLocalViewer(epubTarget)).resolves.toMatchObject({ kind: "text", epub });
+    for (const patch of [
+      { chapters: [{ title: "非法位置", blockIndex: 1 }] },
+      { chapters: [{ title: "序章", blockIndex: 0 }, { title: "重复", blockIndex: 0 }] },
+      { blocks: [{ text: "bad image", heading: false, imageIndex: 1 }] },
+      { blocks: [{ text: "bad image", heading: true, imageIndex: 0 }] },
+      { imageCount: 1.5 }, { blocks: [] },
+    ]) {
+      invoke.mockResolvedValueOnce({ ...native, epub: { ...epub, ...patch } }).mockResolvedValueOnce(undefined);
+      await expect(prepareLocalViewer(epubTarget)).rejects.toThrow("EPUB");
+      expect(invoke).toHaveBeenLastCalledWith("close_local_viewer", { sessionId: comic.sessionId });
+    }
+  });
+
   it("uses the same checked root for system fallback and never launches browser preview", async () => {
     invoke.mockResolvedValueOnce(undefined);
     await openLocalViewerWithSystem(target);

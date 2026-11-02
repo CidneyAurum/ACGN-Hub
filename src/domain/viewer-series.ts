@@ -2,6 +2,7 @@ import type { DownloadTask } from "./download";
 import { getCompletedDownloadOutputs } from "./download-output";
 import type { LocalDownloadReading, LocalDownloadTask } from "./local-download";
 import { getLocalViewerKind, type LocalViewerKind } from "./local-viewer";
+import type { ResourceItem } from "./resource";
 
 export interface ViewerSeriesItem {
   collection: "local" | "engine";
@@ -26,6 +27,7 @@ export interface ViewerSeries {
 export interface ViewerSeriesInput {
   localTasks: readonly LocalDownloadTask[];
   engineTasks: readonly DownloadTask[];
+  resources?: readonly ResourceItem[];
   ownedLocalOutput: (id: string) => string | undefined;
   configuredRoots: readonly string[];
   current: { collection: unknown; id: unknown; file?: unknown };
@@ -54,7 +56,7 @@ function text(value: unknown): string | undefined {
 /** Preserve punctuation, season markers, and simplified/traditional distinctions. */
 function titleKey(value: string): string { return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim(); }
 function filename(path: string): string { return path.split(/[\\/]/).pop() ?? path; }
-function stem(value: string): string { return value.replace(/\.(?:cbz|txt|mp4|mkv|webm|m4v|mov|avi|ts)$/i, "").trim(); }
+function stem(value: string): string { return value.replace(/\.(?:cbz|txt|epub|mp4|mkv|webm|m4v|mov|avi|ts)$/i, "").trim(); }
 function finiteUnit(value: unknown): value is number { return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100_000; }
 
 function parseUnit(value: string): Unit | undefined {
@@ -165,12 +167,18 @@ function collect(input: ViewerSeriesInput): Candidate[] {
   }
   for (const task of input.engineTasks) {
     const outputs = getCompletedDownloadOutputs(task, input.configuredRoots);
+    const resource = task.resourceId ? input.resources?.find((item) => item.id === task.resourceId && item.mediaId === task.mediaId) : undefined;
+    const reading = resource && typeof resource.metadata.seriesTitle === "string" ? checkedReading({
+      mediaId: task.mediaId, editionId: `${resource.sourceId}:${resource.sourceItemId}`,
+      seriesTitle: resource.metadata.seriesTitle, unitTitle: resource.metadata.volumeTitle ?? resource.metadata.chapterName,
+      unitNumber: resource.volume ?? resource.chapter ?? resource.episode,
+    }) : undefined;
     for (const output of outputs) {
       const kind = getLocalViewerKind(output.path);
       if (!kind) continue;
       results.push(candidate({ collection: "engine", id: task.id, path: output.path, allowedRoot: output.allowedRoot, title: output.label, kind,
         route: { path: "/viewer/engine/" + encodeURIComponent(task.id), query: { file: output.path } } },
-      { mediaId: task.mediaId, ...(outputs.length === 1 ? { sourceTitle: task.filename } : {}), ...(outputs.length > 1 ? { batchId: task.id } : {}) }, results.length));
+      { mediaId: task.mediaId, ...(reading && outputs.length === 1 ? { reading } : {}), ...(outputs.length === 1 ? { sourceTitle: task.filename } : {}), ...(outputs.length > 1 ? { batchId: task.id } : {}) }, results.length));
     }
   }
   return results;
@@ -230,6 +238,21 @@ export function buildViewerSeries(input: ViewerSeriesInput): ViewerSeries {
   });
   const currentIndex = group.indexOf(current);
   const items = group.map((value) => value.item);
+  const neighbour = (direction: 1 | -1): ViewerSeriesItem | undefined => {
+    const currentUnit = current.item.unitNumber;
+    for (let index = currentIndex + direction; index >= 0 && index < group.length; index += direction) {
+      const next = group[index].item;
+      // Keep all versions in the explicit file selector, but never continue
+      // into another quality/format copy of the volume currently being read.
+      if (currentUnit !== undefined && next.unitNumber === currentUnit) continue;
+      // An adjacent unit with two completed files needs an explicit choice.
+      // Do not guess a quality or skip over that unit to a later volume.
+      if (next.unitNumber !== undefined && group.some((value, other) => other !== index && value.item.unitNumber === next.unitNumber)) return;
+      return next;
+    }
+  };
+  const next = neighbour(1);
+  const previous = neighbour(-1);
   return { title: current.seriesTitle ?? current.item.title, items, currentIndex,
-    ...(items[currentIndex + 1] ? { next: items[currentIndex + 1] } : {}), ...(items[currentIndex - 1] ? { previous: items[currentIndex - 1] } : {}) };
+    ...(next ? { next } : {}), ...(previous ? { previous } : {}) };
 }

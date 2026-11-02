@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DownloadTask } from "@/domain/download";
 import type { LocalDownloadTask } from "@/domain/local-download";
 import { buildViewerSeries } from "@/domain/viewer-series";
+import type { ResourceItem } from "@/domain/resource";
 
 const root = "D:\\ACGN-E2E\\Library";
 
@@ -27,6 +28,51 @@ function series(current: { collection: "local" | "engine"; id: string; file?: st
 }
 
 describe("viewer series grouping", () => {
+  it("keeps the selected EPUB quality while continuing past other copies of the current volume", () => {
+    const tasks = [engine("one-default", [`${root}\\book-v1-default.epub`], { mediaId: "book", resourceId: "one-default" }),
+      engine("one-orig", [`${root}\\book-v1-orig.epub`], { mediaId: "book", resourceId: "one-orig" }),
+      engine("two", [`${root}\\book-v2.epub`], { mediaId: "book", resourceId: "two" })];
+    const resources: ResourceItem[] = tasks.map((task) => ({ id: task.resourceId!, sourceId: "wenku8", sourceItemId: "1", mediaId: "book", title: "作品", protocol: "http", targetUrl: "https://example.test/" + task.id,
+      volume: task.id === "two" ? 2 : 1, metadata: { seriesTitle: "作品", volumeTitle: task.id === "two" ? "第二卷" : "第一卷", imageQuality: task.id === "one-orig" ? "orig" : "default" }, createdAt: "2026-11-02" }));
+    const input = { localTasks: [], engineTasks: tasks, resources, configuredRoots: [root], ownedLocalOutput: () => undefined };
+    const selected = buildViewerSeries({ ...input, current: { collection: "engine", id: "one-orig" } });
+    expect(selected.items.map((item) => item.id)).toEqual(["one-default", "one-orig", "two"]);
+    expect(selected.items[selected.currentIndex].id).toBe("one-orig");
+    expect(selected.next?.id).toBe("two");
+    expect(selected.previous).toBeUndefined();
+    expect(buildViewerSeries({ ...input, current: { collection: "engine", id: "one-default" } }).next?.id).toBe("two");
+  });
+
+  it("requires an explicit choice for an ambiguous adjacent volume without skipping it", () => {
+    const tasks = [1, 2, 2, 3].map((unit, index) => local(`record-${index}`, `volume-${unit}-${index}.txt`, {
+      kind: "novel", reading: { mediaId: "book", editionId: "source:book", seriesTitle: "作品", unitNumber: unit, unitTitle: `第${unit}卷` },
+    }));
+    const first = series({ collection: "local", id: "record-0" }, tasks);
+    expect(first.items).toHaveLength(4);
+    expect(first.next).toBeUndefined();
+    const last = series({ collection: "local", id: "record-3" }, tasks);
+    expect(last.previous).toBeUndefined();
+    // Once the reader explicitly chooses either second volume, its unambiguous
+    // neighbours become usable; the other copy never becomes the next volume.
+    for (const id of ["record-1", "record-2"]) {
+      const chosen = series({ collection: "local", id }, tasks);
+      expect(chosen.previous?.id).toBe("record-0");
+      expect(chosen.next?.id).toBe("record-3");
+    }
+  });
+
+  it("continues source EPUB volumes by saved volume identity even after files are renamed", () => {
+    const tasks = [engine("two", [`${root}\\后来改的名字.epub`], { mediaId: "book", resourceId: "r2" }),
+      engine("one", [`${root}\\1-v01.epub`], { mediaId: "book", resourceId: "r1" }),
+      engine("other", [`${root}\\同作品其它译本.epub`], { mediaId: "book", resourceId: "r3" })];
+    const resource = (id: string, volume: number, sourceId = "wenku8"): ResourceItem => ({ id, sourceId, sourceItemId: "1", mediaId: "book", title: "文学少女", protocol: "http", targetUrl: "https://example.test/" + id, volume,
+      metadata: { seriesTitle: "文学少女", volumeTitle: volume === 1 ? "渴望死亡的小丑" : "渴求真爱的幽灵" }, createdAt: "2026-11-02" });
+    const resources = [resource("r1", 1), resource("r2", 2), resource("r3", 3, "other-edition")];
+    const input = { localTasks: [], engineTasks: tasks, resources, configuredRoots: [root], current: { collection: "engine", id: "one" }, ownedLocalOutput: () => undefined };
+    expect(buildViewerSeries(input)).toMatchObject({ title: "文学少女", currentIndex: 0, next: { id: "two", unitNumber: 2 } });
+    expect(buildViewerSeries(input).items.map((item) => item.id)).toEqual(["one", "two"]);
+    expect(buildViewerSeries({ ...input, resources: resources.map((item) => ({ ...item, mediaId: "unrelated" })) }).items.every((item) => item.unitNumber === undefined && item.unitTitle === undefined)).toBe(true);
+  });
   it("sorts explicit manga chapters numerically and exposes next/previous routes", () => {
     const tasks = [
       local("ch10", "安達與島村 - 第10话.cbz", { reading: { mediaId: "bgm:1", seriesTitle: "安達與島村", unitTitle: "第10话", unitNumber: 10 } }),

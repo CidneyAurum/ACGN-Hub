@@ -4,11 +4,12 @@ version = 4
 
 [[package]]
 name = "acgn-hub"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "base64 0.22.1",
  "dunce",
  "libc",
+ "quick-xml",
  "reqwest 0.12.28",
  "serde",
  "serde_json",

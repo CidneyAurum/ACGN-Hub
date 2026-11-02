@@ -177,6 +177,9 @@ test("resource type, keyword and provider follow same-page navigation and browse
   await expect(page.getByRole("combobox")).toHaveValue("builtin:mangabz");
   await page.getByRole("button", { name: "小说", exact: true }).click();
   await expect(page).toHaveURL(/type=novel/);
+  // This verifies explicit provider history, independently of which novel
+  // preset currently has the highest default priority.
+  await page.evaluate(() => { window.location.hash = "/resources?type=novel&q=初始漫画&provider=lnovel"; });
   await expect(page.getByRole("combobox")).toHaveValue("builtin:lnovel");
   await page.evaluate(() => { window.location.hash = "/resources?type=manga&q=另一部漫画&provider=copymanga"; });
   await expect(page.getByRole("searchbox")).toHaveValue("另一部漫画");

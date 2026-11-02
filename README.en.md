@@ -2,9 +2,9 @@
 
 A library for anime, manga, light novels and visual novels on Windows and Android. Discover works, compare sources, manage downloads and read your offline collection in one place.
 
-**[Download released builds](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [中文](README.md) · [0.5.2 user guide, Chinese](docs/releases/v0.5.2-usage.md)
+**[Download released builds](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [中文](README.md) · [0.5.3 user guide, Chinese](docs/releases/v0.5.3-usage.md)
 
-**[Version 0.5.2 is released, with all nine assets downloaded and verified](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.2)**, improving resource selection, library / source initialization, Android task recovery and JSON request lifecycles. See the [guide](docs/releases/v0.5.2-usage.md), in Chinese. This release does not change network routing or remove node restrictions.
+**0.5.3 adds illustrated light-novel EPUB files and author-published freeware.** The built-in EPUB reader follows chapter and illustration order, while downloads prefer higher-quality available variants. Withdrawn originals remain distinct from spin-offs. See the [source audit](docs/research/novel-sources-v053.md) and [guide](docs/releases/v0.5.3-usage.md), in Chinese.
 
 ## Features
 
@@ -12,7 +12,7 @@ A library for anime, manga, light novels and visual novels on Windows and Androi
 - Search for a title or author and see related works. Metadata comes from Bangumi and VNDB; source searches can also run independently.
 - Compare language, platform, edition and acquisition method. Full games, patches, trials, soundtracks, web links and direct files are labelled separately.
 - Windows uses embedded aria2 for HTTP / HTTPS, magnets and torrents; qBittorrent is optional. Android has its own foreground HTTP engine and supports the CBZ / TXT download workflows. Available actions reflect each platform's capabilities.
-- Read downloaded CBZ comics in continuous, single-page or fullscreen mode. The TXT reader offers chapters, typography, paper themes and saved progress. Continue to the next downloaded unit of the same work.
+- Read downloaded CBZ comics in continuous, single-page or fullscreen mode. TXT and unencrypted EPUB offer chapters, typography, paper themes and saved progress; EPUB preserves text and illustration order. Continue to the next downloaded unit of the same work.
 - On Windows, keep settings, records, readers and default files in a portable `Data` folder. Registered internal paths follow a moved profile. Android uses private application storage; the platforms keep separate profiles.
 
 The interface uses real cover art and a warm television mark. No generated AI characters are included.
@@ -49,14 +49,14 @@ One Android APK includes **arm64-v8a and x86_64**, with a minimum of **Android 8
 | --- | --- | --- |
 | Discovery, search and collections | Supported | Supported |
 | Ordinary HTTP file downloads | Embedded aria2 | Native foreground engine; pause / resume and restart recovery tested |
-| CBZ / TXT downloads and built-in reading | Supported | Supported, with touch paging and saved reading positions |
+| CBZ / TXT / EPUB downloads and built-in reading | Supported | Supported, with touch paging and saved reading positions |
 | Magnets, torrents and qBittorrent | Supported | Unsupported; actions indicate the desktop requirement |
 | Python, JMComic and public-video tools | Requires corresponding local tools | Unsupported |
 | Visual-novel resource search and archive downloads | Source-dependent | Search and ordinary HTTP archives |
 | Windows game launch and save tools | Supported for the corresponding local workflow | Unsupported |
 | Portable profile migration | Move the complete `Data` directory | Private application storage; no Windows portable mode |
 
-Android downloads require the application to remain running. Native HTTP tasks save checkpoints and recover paused after a restart; resuming depends on server support. There is no system background download service, so continuous lock-screen or background transfers are not promised. CBZ and TXT use the built-in readers; video playback depends on Android WebView and installed codecs. Profiles are separate, without automatic cross-platform synchronization. See the [build and verification record](docs/research/android-v050.md) for tested samples and device scope.
+Android downloads require the application to remain running. Native HTTP tasks save checkpoints and recover paused after a restart; resuming depends on server support. There is no system background download service, so continuous lock-screen or background transfers are not promised. CBZ, TXT and unencrypted EPUB use the built-in readers; video playback depends on Android WebView and installed codecs. Profiles are separate, without automatic cross-platform synchronization. See the [build and verification record](docs/research/android-v050.md) for tested samples and device scope.
 
 ## Source capabilities
 
@@ -65,7 +65,9 @@ Android downloads require the application to remain running. Native HTTP tasks s
 | Bangumi / VNDB | Metadata, cover art, relationships and release records; not media downloads |
 | Mikan / AcgnX / custom RSS | Source-provided torrents, magnets and links; transfer speed depends on peers and the network |
 | MangaBZ / CopyManga / MangaDex | Accessible chapter images packaged as CBZ; languages depend on the source and chapter |
+| Wenku8 EPUB archive | Public per-volume EPUB files with illustrations; higher-quality available variants are preferred, withdrawn books cannot be downloaded |
 | LNovel | Publicly readable Chinese light-novel text, exported as TXT without illustrations |
+| itch.io official freeware selection | Three audited, author-published complete games; platform-specific files and fresh download links, including Chinese and English releases |
 | Shinnku | Direct archive files from translated and original-language catalogs; editions and split archives remain distinct |
 | ShionLib | Edition, platform, file and hash listings; obtaining actual links may require source-site verification |
 | KUN / VNDB release entries | Community pages, official stores, trials and freeware references; web pages open in a browser |

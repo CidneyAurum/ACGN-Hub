@@ -12,8 +12,11 @@ import { useRouter } from "vue-router";
 import { parsePublicVideoInput } from "@/infrastructure/sources/public-video-source-provider";
 import { getLocalViewerKind } from "@/domain/local-viewer";
 import { buildViewerSeries, type ViewerSeries } from "@/domain/viewer-series";
+import { createResourceRepository } from "@/infrastructure/database/create-resource-repository";
+import type { ResourceItem } from "@/domain/resource";
 
 const store = useDownloadStore();
+const readingResources = ref<ResourceItem[]>([]);
 const android = isAndroidRuntime();
 const localStore = useLocalDownloadStore();
 const router = useRouter();
@@ -35,7 +38,7 @@ const outputChoices = computed(() => Object.fromEntries(store.tasks.map((task) =
 const completedSeries = computed(() => {
   const groups: ViewerSeries[] = [];
   const seen = new Set<string>();
-  const options = { localTasks: localStore.tasks, engineTasks: store.tasks,
+  const options = { localTasks: localStore.tasks, engineTasks: store.tasks, resources: readingResources.value,
     ownedLocalOutput: (id: string) => localStore.ownedOutputPath(id), configuredRoots: configuredOutputRoots() };
   const entries = [
     ...localStore.tasks.filter((task) => task.stage === "completed").map((task) => ({ collection: "local" as const, id: task.id })),
@@ -80,6 +83,7 @@ onMounted(async () => {
   localStore.initialize();
   try { await store.initialize(); }
   catch (cause) { formError.value = cause instanceof Error ? cause.message : "下载记录读取失败"; }
+  try { readingResources.value = await (await createResourceRepository()).list(); } catch { /* Files without resource history remain readable. */ }
 });
 
 async function submit(): Promise<void> {
@@ -260,7 +264,7 @@ async function viewTaskOutput(task: DownloadTask): Promise<void> {
   if (!current || taskBusy(current) || !isTauriRuntime()) return;
   const choices = getCompletedDownloadOutputs(current, configuredOutputRoots());
   const output = choices.length === 1 ? choices[0] : choices.find((item) => item.path === outputSelections.value[current.id]);
-  if (!output || !getLocalViewerKind(output.path)) { formError.value = "先选择可在应用内观看的视频、CBZ 或 TXT 文件。"; return; }
+  if (!output || !getLocalViewerKind(output.path)) { formError.value = "先选择可在应用内观看的视频、CBZ、TXT 或 EPUB 文件。"; return; }
   await router.push({ path: `/viewer/engine/${encodeURIComponent(current.id)}`, query: { file: output.path } });
 }
 

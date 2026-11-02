@@ -2,7 +2,7 @@ import { initializeStoredArray, readStoredArray, updateStoredArray, assertRecord
 import type Database from "@tauri-apps/plugin-sql";
 import { loadDatabase, initializeRepository } from "@/infrastructure/database/repository-runtime";
 import type { SourceConfigRepository } from "@/application/source-config-ports";
-import { isRetiredSourceType, type RetiredSourceConfigType, type SourceConfig } from "@/domain/source";
+import { isSourceConfigType, isRetiredSourceType, type RetiredSourceConfigType, type SourceConfig } from "@/domain/source";
 
 interface RetiredSourceRecord {
   id: string;
@@ -156,5 +156,5 @@ function isSourceConfig(value: unknown): value is SourceConfig {
 }
 
 function isSourceType(value: unknown): value is SourceConfig["type"] {
-  return value === "rss" || value === "github_release" || value === "nyaa" || value === "kungal" || value === "shinnku" || value === "shionlib" || value === "vndb_release" || value === "copymanga" || value === "jmcomic" || value === "mangadex" || value === "mangabz" || value === "weebcentral" || value === "kuaikan" || value === "archive" || value === "anime_garden" || value === "lnovel" || value === "public_video";
+  return isSourceConfigType(value) || value === "nyaa" || value === "anime_garden";
 }

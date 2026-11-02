@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LocalStorageSourceConfigRepository, SqliteSourceConfigRepository, type SourceConfigStorageLike } from "@/infrastructure/database/source-config-repository";
+import { SOURCE_CONFIG_TYPES, isRetiredSourceType } from "@/domain/source";
 
 const { database } = vi.hoisted(() => ({ database: { execute: vi.fn(), select: vi.fn() } }));
 vi.mock("@/infrastructure/database/repository-runtime", async (importOriginal) => ({
@@ -20,6 +21,17 @@ class MemoryStorage implements SourceConfigStorageLike {
 }
 
 describe("LocalStorageSourceConfigRepository", () => {
+  it("persists every selectable source type so new adapters remain usable after restart", async () => {
+    const storage = new MemoryStorage();
+    const repository = new LocalStorageSourceConfigRepository(storage);
+    await repository.initialize();
+    for (const type of SOURCE_CONFIG_TYPES.filter((type) => !isRetiredSourceType(type))) {
+      await repository.upsert({ id: type, type, name: type, url: "https://example.com", enabled: false, createdAt: "2026-11-02", updatedAt: "2026-11-02" });
+    }
+    const restored = new LocalStorageSourceConfigRepository(storage);
+    await restored.initialize();
+    expect((await restored.list()).map((config) => config.type).sort()).toEqual(SOURCE_CONFIG_TYPES.filter((type) => !isRetiredSourceType(type)).sort());
+  });
   it("persists, updates and removes RSS source configs", async () => {
     const repository = new LocalStorageSourceConfigRepository(new MemoryStorage());
     const config = {

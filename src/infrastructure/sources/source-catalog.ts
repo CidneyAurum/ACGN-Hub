@@ -22,6 +22,8 @@ export interface SourceUsage {
 }
 
 const capabilities: Record<string, SourceCapability> = {
+  itch_freeware: { label: "itch.io 官方免费精选", supportedTypes: ["visual_novel"], mode: "direct", setup: "none", requiresDesktop: true, description: "精选 one night, hot springs、蝴蝶汤和 missed messages. 等作者官网免费完整视觉小说，提供来源标明的语言、平台和版本；按官网实际文件下载。精选清单不等于全站搜索，付费附件和画集不混入游戏本体。中文支持依作者标注，下载后按平台自行安装或解压。" },
+  wenku8_epub: { label: "Wenku8 EPUB", supportedTypes: ["novel"], mode: "direct", setup: "none", requiresDesktop: true, description: "按书名或作者检索中文轻小说，分卷下载保留正文和插图的 EPUB，可在应用内阅读。目录来自社区公开归档，版权下架和未生成的作品会明确标记；收录和更新以来源为准。下载需能访问 GitHub。" },
   shinnku: { label: "真红小站", supportedTypes: ["visual_novel"], mode: "direct", setup: "none", requiresDesktop: true, description: "检索中文目录与原文合集，中文 Windows 版优先；原文语言按文件注明，游戏本体与补丁分别标注。文件交给内置下载器，容量与分卷以原站列表为准，下载后需要自行解压。" },
   shionlib: { label: "ShionLib", supportedTypes: ["visual_novel"], mode: "index", setup: "none", requiresDesktop: false, description: "按作品查看完整资源版本、汉化组、语言、平台、容量和原站提供的文件哈希。打开准确资源页，在原站完成验证后获取下载链接；不把验证页作为文件下载。" },
   vndb_release: { label: "VNDB 官方发行参考", supportedTypes: ["visual_novel"], mode: "index", setup: "none", requiresDesktop: false, description: "从 VNDB 实时读取官方发行记录，中文完整版优先。作为官网与商店版本参考，试玩、完整版本和补丁分别标注，购买与地区条件以原站为准。" },
@@ -89,7 +91,7 @@ export function getSourcePriority(config: SourceConfig, mediaType?: MediaType): 
   if (!getSourceCapability(config).supportedTypes.length || mediaType && !sourceSupportsType(config, mediaType)) return 1000;
   const feed = rssKind(config);
   if (feed) return feed === "mikan" ? 10 : feed === "acgnx" ? 20 : feed === "anime" ? 30 : 40;
-  const priorities: Record<string, number> = { mangabz: 10, copymanga: 20, lnovel: 10, shinnku: 5, shionlib: 10, kungal: 20, vndb_release: 100, mangadex: 60, public_video: 70, archive: 80, jmcomic: 90, github_release: 300 };
+  const priorities: Record<string, number> = { mangabz: 10, copymanga: 20, wenku8_epub: 5, lnovel: 10, shinnku: 5, shionlib: 10, itch_freeware: 15, kungal: 20, vndb_release: 100, mangadex: 60, public_video: 70, archive: 80, jmcomic: 90, github_release: 300 };
   return priorities[config.type] ?? 1000;
 }
 
@@ -104,10 +106,12 @@ export function getSourceUsage(config: SourceConfig, android = isAndroidRuntime(
   if (feed) return { ...common, ...(android ? { description: "安卓端可读取订阅并检索资源；仅 HTTP/HTTPS 文件直链可在应用内下载，磁力和种子请使用电脑版。" } : {}), tier: feed === "custom" ? "custom" : "primary", label: feed === "custom" ? "自定义订阅" : "动画主源", format: feed === "custom" ? "附件 / 磁力 / Torrent" : "磁力 / Torrent", language: feed === "custom" ? "语言由订阅内容决定" : "字幕组发布 · 核对字幕语言" };
   switch (config.type) {
     case "shinnku": return { ...common, tier: "primary", label: "游戏文件", format: "HTTP 游戏归档", language: "中文目录优先 · 版本依原站标注" };
+    case "itch_freeware": return { ...common, tier: "backup", label: "官方免费精选", format: "完整游戏 · 文件下载", language: "中文依作者标注 · 平台分别列出" };
     case "shionlib": return { ...common, tier: "index", label: "多版本资源库", format: "完整资源页 · 原站验证", language: "汉化版本 / 语言 / 平台可选" };
     case "mangabz": return { ...common, tier: "primary", label: "中文漫画", format: "原站页图 · CBZ", language: "中文" };
     case "copymanga": return { ...common, tier: "primary", label: "中文漫画", format: "原站图片 · CBZ", language: "中文" };
     case "lnovel": return { ...common, tier: "primary", label: "中文轻小说", format: "分卷正文 · TXT", language: "中文" };
+    case "wenku8_epub": return { ...common, tier: "primary", label: "插图轻小说", format: "分卷 EPUB · 内置阅读", language: "中文" };
     case "mangadex": return { ...common, tier: "backup", label: "多语备用", format: "原始页图 · CBZ", language: "多语 · 章节依作品而异" };
     case "public_video": return { ...common, tier: "backup", label: "公开投稿备用", format: "公开投稿 · MP4", language: "语言依投稿而异" };
     case "archive": return { ...common, tier: "backup", label: "公开档案备用", format: "档案文件直链", language: "多语 · 格式依附件而异" };

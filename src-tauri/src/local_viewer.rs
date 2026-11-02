@@ -35,6 +35,16 @@ pub struct PreparedLocalViewer {
     size_bytes: u64,
     modified_at: String,
     text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    epub: Option<PreparedEpub>,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreparedEpub {
+    blocks: Vec<crate::epub_reader::EpubBlock>,
+    chapters: Vec<crate::epub_reader::EpubChapter>,
+    image_count: usize,
 }
 
 struct Session {
@@ -53,6 +63,7 @@ struct LocalMedia {
 
 enum Content {
     Comic(Vec<ComicPage>),
+    Epub(Vec<ComicPage>),
     Video(&'static str),
     Text,
 }
@@ -155,6 +166,7 @@ fn prepare_at_epoch(path: String, allowed_root: String, epoch: u64) -> Result<Pr
     }
     let snapshot = FileSnapshot::from(&metadata);
     let ext = extension(&checked);
+    let mut epub = None;
     let (content, kind, page_count, text) = if ext == "cbz" {
         if snapshot.size > MAX_ARCHIVE_BYTES { return Err("漫画归档超过 512 MB，无法在应用内阅读".into()); }
         let pages = list_comic_pages(&mut file)?;
@@ -163,11 +175,16 @@ fn prepare_at_epoch(path: String, allowed_root: String, epoch: u64) -> Result<Pr
     } else if ext == "txt" {
         let text = read_text(&mut file, snapshot.size)?;
         (Content::Text, "text", None, Some(text))
+    } else if ext == "epub" {
+        let book = crate::epub_reader::read_epub(&mut file)?;
+        let pages = book.images.into_iter().map(|image| ComicPage { index: image.index, name: image.name, size: image.size }).collect::<Vec<_>>();
+        epub = Some(PreparedEpub { blocks: book.blocks, chapters: book.chapters, image_count: pages.len() });
+        (Content::Epub(pages), "text", None, None)
     } else if let Some(mime) = video_mime(&ext) {
         if snapshot.size == 0 { return Err("视频文件为空，无法播放".into()); }
         (Content::Video(mime), "video", None, None)
     } else {
-        return Err("应用内阅读目前支持 CBZ 漫画、UTF-8 TXT 小说和本地视频；其它格式请用系统程序打开".into());
+        return Err("应用内阅读支持 CBZ 漫画、UTF-8 TXT、无加密 EPUB 小说和本地视频；其它格式请用系统程序打开".into());
     };
     let title = checked.file_name().and_then(|name| name.to_str()).unwrap_or("本地文件").to_owned();
     let modified_at = snapshot.modified.and_then(|value| value.duration_since(UNIX_EPOCH).ok())
@@ -188,7 +205,7 @@ fn prepare_at_epoch(path: String, allowed_root: String, epoch: u64) -> Result<Pr
     };
     all.insert(session_id.clone(), session);
     crate::diagnostics::record(&format!("local_viewer.prepare kind={kind} pages={}", page_count.unwrap_or(0)));
-    Ok(PreparedLocalViewer { session_id, kind, title, page_count, size_bytes, modified_at, text })
+    Ok(PreparedLocalViewer { session_id, kind, title, page_count, size_bytes, modified_at, text, epub })
 }
 
 #[tauri::command]
@@ -363,7 +380,10 @@ fn protocol_error(status: StatusCode, message: &str, head: bool) -> Response<Vec
 }
 
 fn read_comic_page(media: &mut LocalMedia, page: usize, head: bool) -> Result<Response<Vec<u8>>, String> {
-    let Content::Comic(pages) = &media.content else { return Err("此会话不是漫画阅读会话".into()); };
+    let pages = match &media.content {
+        Content::Comic(pages) | Content::Epub(pages) => pages,
+        _ => return Err("此会话没有可读取的图片".into()),
+    };
     let chosen = pages.get(page).cloned().ok_or("漫画页码超出范围")?;
     let mut archive = zip::ZipArchive::new(&mut media.file).map_err(|_| "CBZ 已损坏，无法读取")?;
     let mut entry = archive.by_index(chosen.index).map_err(|_| "无法读取此漫画页")?;
@@ -532,6 +552,16 @@ mod tests {
             }
             zip.finish().unwrap();
         }
+        fn epub(&self, filename: &str, image: &[u8]) {
+            self.archive(filename, &[
+                ("mimetype", b"application/epub+zip"),
+                ("META-INF/container.xml", br#"<container><rootfiles><rootfile full-path="OEBPS/book.opf" media-type="application/oebps-package+xml"/></rootfiles></container>"#),
+                ("OEBPS/book.opf", br#"<package><manifest><item id="chapter" href="Text/chapter.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="chapter"/></spine></package>"#),
+                ("OEBPS/private.txt", b"unreferenced-private-content"),
+                ("OEBPS/Text/chapter.xhtml", "<html><head><title>真正的章节名</title></head><body><p>第一段正文</p><img src=\"../Images/original.png\" alt=\"原书插图\"/><p>结尾正文</p></body></html>".as_bytes()),
+                ("OEBPS/Images/original.png", image),
+            ]);
+        }
     }
     impl Drop for Fixture {
         fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
@@ -539,6 +569,104 @@ mod tests {
 
     fn request(id: &str, tail: &str) -> Request<Vec<u8>> {
         Request::builder().uri(format!("http://acgn-local.localhost/{id}/{tail}")).body(Vec::new()).unwrap()
+    }
+
+    #[test]
+    fn epub_text_and_original_illustrations_use_opaque_revocable_sessions() {
+        let _serial = TEST_SESSION_GUARD.lock().unwrap();
+        let fixture = Fixture::new();
+        fixture.epub("illustrated.epub", PNG);
+        let prepared = fixture.prepare("illustrated.epub").unwrap();
+        assert_eq!(prepared.kind, "text");
+        assert!(prepared.text.is_none());
+        assert!(prepared.page_count.is_none());
+        let document = prepared.epub.as_ref().unwrap();
+        assert_eq!(document.image_count, 1);
+        assert_eq!(document.chapters[0].title, "真正的章节名");
+        assert_eq!(document.blocks.iter().filter_map(|block| block.image_index).collect::<Vec<_>>(), [0]);
+        let wire = serde_json::to_value(&prepared).unwrap();
+        assert_eq!(wire["epub"]["imageCount"], 1);
+        assert!(!wire.to_string().contains("OEBPS"));
+        let page = protocol_response(request(&prepared.session_id, "page/0"));
+        assert_eq!(page.status(), StatusCode::OK);
+        assert_eq!(page.headers()[header::CONTENT_TYPE], "image/png");
+        assert_eq!(page.body(), PNG);
+        let head = protocol_response(Request::builder().method(Method::HEAD).uri(format!("/{}/page/0", prepared.session_id)).body(Vec::new()).unwrap());
+        assert!(head.body().is_empty());
+        assert_eq!(head.headers()[header::CONTENT_LENGTH], PNG.len().to_string());
+        // Only prepared illustration indices are capabilities. ZIP indices,
+        // unreferenced text and arbitrary archive names cannot be fetched.
+        for tail in ["page/1", "page/3", "video", "file/OEBPS/private.txt", "page/0?path=OEBPS/private.txt"] {
+            let reply = protocol_response(request(&prepared.session_id, tail));
+            assert_ne!(reply.status(), StatusCode::OK, "{tail}");
+            assert!(!String::from_utf8_lossy(reply.body()).contains("unreferenced-private-content"));
+        }
+        close_local_viewer(prepared.session_id.clone()).unwrap();
+        assert_eq!(protocol_response(request(&prepared.session_id, "page/0")).status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn changed_epub_snapshot_refuses_image_reads_and_a_new_session_does_not_reuse_the_old_token() {
+        let _serial = TEST_SESSION_GUARD.lock().unwrap();
+        let fixture = Fixture::new();
+        fixture.epub("changed.epub", PNG);
+        let prepared = fixture.prepare("changed.epub").unwrap();
+        let session = sessions().lock().unwrap().get(&prepared.session_id).cloned().unwrap();
+        session.media.lock().unwrap().snapshot.size += 1;
+        assert_eq!(protocol_response(request(&prepared.session_id, "page/0")).status(), StatusCode::CONFLICT);
+        close_local_viewer(prepared.session_id.clone()).unwrap();
+        assert!(!session.active.load(AtomicOrdering::Acquire));
+        drop(session);
+        fixture.epub("changed.epub", PNG);
+        let replacement = fixture.prepare("changed.epub").unwrap();
+        assert_ne!(prepared.session_id, replacement.session_id);
+        assert_eq!(protocol_response(request(&prepared.session_id, "page/0")).status(), StatusCode::NOT_FOUND);
+        assert_eq!(protocol_response(request(&replacement.session_id, "page/0")).status(), StatusCode::OK);
+        close_local_viewer(replacement.session_id).unwrap();
+    }
+
+    #[test]
+    fn epub_fake_images_are_rejected_before_publishing_a_session() {
+        let _serial = TEST_SESSION_GUARD.lock().unwrap();
+        let fixture = Fixture::new();
+        let previous = sessions().lock().unwrap().len();
+        fixture.epub("fake.epub", b"<html><script>error page</script></html>");
+        assert!(fixture.prepare("fake.epub").unwrap_err().contains("位图"));
+        assert_eq!(sessions().lock().unwrap().len(), previous);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn held_epub_cannot_be_replaced_until_its_session_is_closed() {
+        let _serial = TEST_SESSION_GUARD.lock().unwrap();
+        let fixture = Fixture::new();
+        fixture.epub("held.epub", PNG);
+        let prepared = fixture.prepare("held.epub").unwrap();
+        let path = fixture.0.join("held.epub");
+        assert!(OpenOptions::new().write(true).open(&path).is_err());
+        assert!(std::fs::rename(&path, fixture.0.join("replacement.epub")).is_err());
+        close_local_viewer(prepared.session_id.clone()).unwrap();
+        std::fs::rename(&path, fixture.0.join("replacement.epub")).unwrap();
+        assert_eq!(protocol_response(request(&prepared.session_id, "page/0")).status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    #[ignore = "uses an explicitly supplied verified local EPUB; no network or canonical user profile"]
+    fn verifies_real_epub_through_native_session_and_image_protocol() {
+        let _serial = TEST_SESSION_GUARD.lock().unwrap();
+        let path = PathBuf::from(std::env::var("ACGN_EPUB_TEST_FILE").expect("set ACGN_EPUB_TEST_FILE"));
+        let root = path.parent().expect("EPUB needs an explicit test directory");
+        let prepared = prepare_impl(path.to_string_lossy().into_owned(), root.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(prepared.kind, "text");
+        let epub = prepared.epub.as_ref().unwrap();
+        assert!(epub.image_count > 0);
+        assert!(epub.chapters.len() > 1);
+        let image = protocol_response(request(&prepared.session_id, "page/0"));
+        assert_eq!(image.status(), StatusCode::OK);
+        assert!(ImageFormat::detect(image.body()).is_some());
+        println!("real EPUB native session verified: blocks={} chapters={} imageCount={} firstImageBytes={}", epub.blocks.len(), epub.chapters.len(), epub.image_count, image.body().len());
+        close_local_viewer(prepared.session_id.clone()).unwrap();
+        assert_eq!(protocol_response(request(&prepared.session_id, "page/0")).status(), StatusCode::NOT_FOUND);
     }
 
     #[test]

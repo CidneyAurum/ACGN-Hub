@@ -1,3 +1,4 @@
+import { SOURCE_CONFIG_TYPES } from "@/domain/source";
 import { invoke } from "@tauri-apps/api/core";
 import { z } from "zod";
 import { isTauriRuntime, nowIso } from "@/shared/runtime";
@@ -62,7 +63,7 @@ const text = z.string().min(1);
 const optionalText = z.string().optional();
 const finiteNumber = z.number().finite().nonnegative();
 const health = z.object({ ok: z.boolean(), checkedAt: text, message: optionalText });
-const sourceSchema = z.object({ id: text, type: z.enum(["rss", "github_release", "nyaa", "anime_garden", "kungal", "copymanga", "jmcomic", "mangadex", "mangabz", "weebcentral", "kuaikan", "archive", "lnovel", "public_video"]), name: text, url: text, enabled: z.boolean(), createdAt: text, updatedAt: text, token: optionalText, lastHealth: health.optional() }).passthrough();
+const sourceSchema = z.object({ id: text, type: z.enum([...SOURCE_CONFIG_TYPES, "nyaa", "anime_garden"]), name: text, url: text, enabled: z.boolean(), createdAt: text, updatedAt: text, token: optionalText, lastHealth: health.optional() }).passthrough();
 const resourceSchema = z.object({ id: text, sourceId: text, sourceItemId: text, title: text, protocol: z.enum(["http", "magnet", "torrent"]), targetUrl: text, createdAt: text, metadata: z.record(z.string(), z.unknown()), mediaId: optionalText, episode: finiteNumber.optional(), chapter: finiteNumber.optional(), volume: finiteNumber.optional(), sizeBytes: finiteNumber.optional(), language: optionalText, resolution: optionalText, format: optionalText, publishedAt: optionalText }).passthrough();
 const fileSchema = z.object({ id: text, path: text, sizeBytes: finiteNumber, status: z.enum(["present", "missing", "duplicate"]).optional(), scannedAt: text, mediaId: optionalText, sha256: optionalText, duplicateOf: optionalText }).passthrough();
 const gameSchema = z.object({ id: text, path: text, title: text, engine: z.enum(["renpy", "kirikiri", "unity", "unknown"]), detectedFiles: z.array(z.string()), createdAt: text, updatedAt: text, mediaId: optionalText, coverUrl: optionalText, launchPath: optionalText }).passthrough();

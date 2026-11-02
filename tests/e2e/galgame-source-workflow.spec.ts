@@ -43,8 +43,12 @@ test("all enabled Galgame sources search together, isolate failures and leave cl
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("acgn-hub.source-configs.v1") ?? "[]").find((item: { id: string }) => item.id === "closed-feed").enabled)).toBe(false);
   await page.getByRole("button", { name: "选择作品并查看资源", exact: true }).click();
   await expect(page).toHaveURL(/#\/media\/source/);
-  const savedAliases = await page.evaluate(() => JSON.parse(localStorage.getItem("acgn-hub.media-library.v1") ?? "[]")[0].aliases as string[]);
-  expect(savedAliases).toEqual(expect.arrayContaining(["ATRI", "亚托莉", "ATRI -My Dear Moments-"]));
+  const savedWork = await page.evaluate(() => JSON.parse(localStorage.getItem("acgn-hub.media-library.v1") ?? "[]")[0] as { aliases: string[]; metadata: { sourceQuery: string } });
+  expect(savedWork.aliases).toEqual(["亚托莉", "ATRI -My Dear Moments-"]);
+  expect(savedWork.metadata.sourceQuery).toBe("ATRI");
+  await page.getByRole("link", { name: "← 返回资源搜索", exact: true }).click();
+  await expect(page).toHaveURL(/#\/resources\?/);
+  await expect(page.getByRole("searchbox")).toHaveValue("ATRI");
 });
 
 test("all-source search with no enabled sources does not activate a preset", async ({ page }) => {

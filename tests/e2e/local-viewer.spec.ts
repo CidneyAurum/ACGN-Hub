@@ -122,6 +122,48 @@ function localRow(page: Page, title: string) {
   return page.locator("article.task-row").filter({ has: page.locator(".task-title-line strong", { hasText: title }) });
 }
 
+test("downloaded EPUB uses its own chapter directory, renders illustrations and continues the saved work's next volume", async ({ page }) => {
+  const firstPath = directory + "\\第一本改名了.epub";
+  const secondPath = directory + "\\第二本改名了.epub";
+  const records = [
+    { ...engineTask("epub1", [firstPath]), mediaId: "epub-book", resourceId: "epub-r1", protocol: "http" as const },
+    { ...engineTask("epub2", [secondPath]), mediaId: "epub-book", resourceId: "epub-r2", protocol: "http" as const },
+  ];
+  await seedTasks(page, [], records);
+  await page.addInitScript(() => {
+    localStorage.setItem("acgn-hub.resources.v1", JSON.stringify([1, 2].map((volume) => ({
+      id: "epub-r" + volume, sourceId: "wenku8:test", sourceItemId: "1", mediaId: "epub-book", title: "图文小说",
+      protocol: "http", targetUrl: "https://example.test/volume" + volume + ".epub", volume,
+      metadata: { seriesTitle: "图文小说", volumeTitle: "来源分卷" + volume }, createdAt: "2026-11-02",
+    }))));
+  });
+  const simulation = await simulateViewer(page);
+  simulation.brokenImages.add(chapterOneSessionId + ":0");
+  const doc = { blocks: [{ text: "月下相遇", heading: true }, { text: "正文前段", heading: false },
+    { text: "原书插图", heading: false, imageIndex: 0 }, { text: "正文后段<script>literal</script>", heading: false },
+    { text: "到家之后", heading: true }, { text: "最后的正文", heading: false }],
+    chapters: [{ title: "月下相遇", blockIndex: 0 }, { title: "到家之后", blockIndex: 4 }], imageCount: 1 };
+  simulation.prepare = async (request) => ({ sessionId: request.path === firstPath ? chapterOneSessionId : chapterTwoSessionId,
+    kind: "text", title: "图文小说", sizeBytes: 3000, modifiedAt, epub: doc });
+  await page.goto("/#/viewer/engine/epub1");
+  await expect(page.getByRole("combobox", { name: "小说章节目录", exact: true }).locator("option")).toHaveText(["月下相遇", "到家之后"]);
+  await expect(page.getByRole("combobox", { name: "作品章节目录", exact: true }).locator("option")).toHaveText(["来源分卷1", "来源分卷2"]);
+  await expect(page.getByText("正文后段<script>literal</script>", { exact: true })).toBeAttached();
+  await page.locator(".novel-illustration").scrollIntoViewIfNeeded();
+  await expect(page.getByRole("alert")).toContainText("插图暂时无法读取");
+  simulation.brokenImages.delete(chapterOneSessionId + ":0");
+  await page.getByRole("button", { name: "重新读取插图", exact: true }).click();
+  const image = page.getByRole("img", { name: "原书插图", exact: true });
+  await expect(image).toHaveJSProperty("naturalWidth", 480);
+  await expect(image).toHaveAttribute("src", new RegExp(chapterOneSessionId + "/page/0$"));
+  await page.getByRole("combobox", { name: "小说章节目录", exact: true }).selectOption({ label: "到家之后" });
+  await expect(page.getByRole("heading", { name: "到家之后", exact: true })).toBeInViewport();
+  await page.getByRole("button", { name: "下一话 / 卷", exact: true }).click();
+  await expect(page).toHaveURL(/#\/viewer\/engine\/epub2/);
+  await expect(page.getByRole("combobox", { name: "作品章节目录", exact: true })).toHaveValue("1");
+  await expect.poll(() => simulation.closed).toContain(chapterOneSessionId);
+});
+
 async function expectComicPage(page: Page, number: number, width = 480): Promise<void> {
   const image = page.getByRole("img", { name: `固定漫画 - 第01话，第 ${number} 页`, exact: true });
   await expect(image).toHaveAttribute("src", `http://127.0.0.1:1420/__e2e-local-viewer/${comicSessionId}/page/${number - 1}`);

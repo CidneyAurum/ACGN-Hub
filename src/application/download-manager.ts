@@ -1,5 +1,5 @@
 import type { DownloadEngine, TaskRepository } from "./ports";
-import type { DownloadEngineSettings, DownloadOptions, DownloadTask, DownloadState, DownloadStatus, DownloadNaming } from "@/domain/download";
+import type { DownloadEngineSettings, DownloadOptions, DownloadTask, DownloadState, DownloadStatus, DownloadNaming, DownloadTarget } from "@/domain/download";
 import { canTransition } from "@/domain/state-machine";
 import { sanitizeFileName, sanitizeMobileFileName } from "@/domain/organization";
 import { assertDownloadDirectory, normalizeDedupeKey, parseDownloadTarget } from "@/shared/validation";
@@ -11,6 +11,9 @@ export interface DownloadManagerDependencies {
   settings(): { maxConcurrentDownloads: number; speedLimitBytesPerSecond: number; aria2Endpoint?: string; qbittorrentEndpoint?: string; btDownloadEngine?: "aria2" | "qbittorrent"; httpDownloadEngine?: "aria2" | "mobile_http" };
   onChange(tasks: DownloadTask[]): void;
   onComplete?(task: DownloadTask): void;
+  /** Resolve a source-owned file just before starting it; keep stable sourceUrl in storage. */
+  resolveTarget?(task: DownloadTask): Promise<DownloadTarget>;
+  requiresFreshTarget?(task: DownloadTask): boolean;
 }
 export interface DownloadAssociation { mediaId?: string; resourceId?: string; sourceName?: string; filename?: string }
 
@@ -54,7 +57,7 @@ export class DownloadManager {
     return this.initialized;
   }
 
-  async add(rawUrl: string, directory: string, association: DownloadAssociation = {}): Promise<void> {
+  async add(rawUrl: string, directory: string, association: DownloadAssociation = {}, beforeCreate?: () => Promise<void>): Promise<void> {
     await this.initialize();
     let createdId = "";
     const operation = this.additions.catch(() => undefined).then(async () => {
@@ -75,6 +78,9 @@ export class DownloadManager {
         state: "queued", totalBytes: 0, completedBytes: 0, speedBytesPerSecond: 0,
         files: [], dedupeKey, createdAt: timestamp, updatedAt: timestamp,
       };
+      // Source metadata must exist before a queued task resolves its file, but
+      // rejected duplicates must never overwrite the original association.
+      await beforeCreate?.();
       await this.deps.repository.insert(task);
       this.tasks = [task, ...this.tasks];
       createdId = task.id;
@@ -214,7 +220,12 @@ export class DownloadManager {
     await this.lock(id, async () => {
       const task = this.current(id);
       this.requireState(task, ["failed", "cancelled"], "重试");
-      const keepRemote = ["qbittorrent", "mobile_http"].includes(task.engineId) && task.state === "failed" && task.errorCode !== "ENGINE_TASK_NOT_FOUND";
+      const freshTarget = this.deps.requiresFreshTarget?.(task) === true;
+      if (freshTarget && task.engineTaskId) {
+        try { await this.engine(task).cancel(task.engineTaskId); }
+        catch (cause) { if (!isMissingRemoteTask(cause, task.engineId)) throw cause; }
+      }
+      const keepRemote = !freshTarget && ["qbittorrent", "mobile_http"].includes(task.engineId) && task.state === "failed" && task.errorCode !== "ENGINE_TASK_NOT_FOUND";
       await this.save({ ...task, engineTaskId: keepRemote ? task.engineTaskId : undefined, state: "queued", stage: undefined, error: undefined, errorCode: undefined, speedBytesPerSecond: 0, updatedAt: nowIso() });
       this.clearCancelledRecovery(id);
     });
@@ -280,12 +291,13 @@ export class DownloadManager {
         try {
           engine = this.engine(task);
           const options: DownloadOptions = { directory: task.directory, filename: task.filename, clientTag: "acgn-" + task.id, speedLimitBytesPerSecond: this.deps.settings().speedLimitBytesPerSecond };
-          remoteId = task.engineTaskId ?? await engine.add(parseDownloadTarget(task.sourceUrl), options);
+          const target = () => this.deps.resolveTarget ? this.deps.resolveTarget(task) : Promise.resolve(parseDownloadTarget(task.sourceUrl));
+          remoteId = task.engineTaskId ?? await engine.add(await target(), options);
           if (task.engineTaskId) {
             try { await engine.resume(remoteId); }
             catch (cause) {
               if (!isMissingRemoteTask(cause, task.engineId)) throw cause;
-              remoteId = await engine.add(parseDownloadTarget(task.sourceUrl), options);
+              remoteId = await engine.add(await target(), options);
             }
           }
         } catch (cause) {

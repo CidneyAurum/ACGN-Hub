@@ -69,6 +69,7 @@ interface LNovelSourceProviderOptions {
 }
 
 const CATALOG_TTL_MS = 30 * 60 * 1000;
+const SEARCH_PAGE_SIZE = 40;
 const sharedCaches = new WeakMap<JsonFetcher, MemoryCache>();
 
 interface NovelResourceEntry {
@@ -106,8 +107,11 @@ export class LNovelSourceProvider implements SourceProvider {
 
   async search(query: SourceSearchQuery): Promise<SourceSearchResult[]> {
     if (query.mediaType !== "novel") return [];
+    const page = query.page ?? 1;
+    if (!Number.isSafeInteger(page) || page < 1) throw new Error("LNovel 搜索页码无效");
     const directId = novelIdFromQuery(query.keyword, this.baseUrl);
     if (directId !== undefined) {
+      if (page > 1) return [];
       const novel = await this.loadNovel(directId);
       return [{ sourceId: this.id, sourceItemId: String(directId), title: novel.name,
         ...(novel.cover ? { coverUrl: novel.cover } : {}), raw: novelSearchMetadata(novel) }];
@@ -136,7 +140,7 @@ export class LNovelSourceProvider implements SourceProvider {
       .map((item) => ({ item, score: Math.max(sourceTitleMatch(item.name, terms, [], { allowShortCjk: true }).score, authorMatch(item.authors, terms) ? 100 : 0) }))
       .filter(({ score }) => score > 0)
       .sort((left, right) => right.score - left.score || left.item.nid - right.item.nid)
-      .slice(0, 12);
+      .slice((page - 1) * SEARCH_PAGE_SIZE, page * SEARCH_PAGE_SIZE);
     return matched.map(({ item }) => {
       return {
         sourceId: this.id,

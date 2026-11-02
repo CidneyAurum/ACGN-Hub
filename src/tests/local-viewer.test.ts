@@ -39,8 +39,9 @@ describe("current local viewing targets", () => {
   it("rejects unsupported formats and invalid task routes", () => {
     expect(getLocalViewerKind("第1话.CBZ")).toBe("comic");
     expect(getLocalViewerKind("volume.TXT")).toBe("text");
+    expect(getLocalViewerKind("volume.EPUB")).toBe("text");
     expect(getLocalViewerKind("episode.MKV")).toBe("video");
-    for (const path of ["book.epub", "book.pdf", "script.html", "video.mp4.exe", "chapter.zip", "a.cbz?path=secret"]) expect(getLocalViewerKind(path)).toBeUndefined();
+    for (const path of ["book.pdf", "script.html", "video.mp4.exe", "chapter.zip", "a.cbz?path=secret"]) expect(getLocalViewerKind(path)).toBeUndefined();
     for (const route of [{ collection: "other" }, { id: [] }, { id: "" }, { id: "missing" }]) expect(() => resolveLocalViewerTarget({ ...input, ...route })).toThrow();
   });
 });

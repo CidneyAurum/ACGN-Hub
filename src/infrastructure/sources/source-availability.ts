@@ -5,6 +5,7 @@ import { isAndroidRuntime } from "@/shared/runtime";
 export function sourceDescription(config: SourceConfig): string {
   switch (config.type as string) {
     case "shinnku": return "原站游戏档案目录，支持匿名检索和内置 HTTP 文件下载；保留完整压缩包名与分卷，解压后再添加本地游戏。";
+    case "itch_freeware": return "精选作者官网发布的免费完整游戏；搜索精选清单，按平台列出真实文件，开始下载或失败重试时自动刷新官网时效链接。";
     case "shionlib": return "公开的多版本游戏资源库，显示容量、汉化组与原站文件哈希；链接需要在原站完成验证后获取。";
     case "public_video": return isAndroidRuntime() ? "安卓端暂不支持公开投稿解析与 MP4 下载；请改用电脑版，或在安卓端使用 HTTP 文件直链。" : "公开投稿搜索与 MP4 下载；先核对时长、上传者和集数。仅游客可访问的视频，不读取浏览器账号或 Cookie。";
     case "nyaa":
@@ -17,6 +18,7 @@ export function sourceDescription(config: SourceConfig): string {
       ? "已保存登录凭据；具体 Token 有效性和章节权限仍需由站点验证。桌面端生成 CBZ。"
       : "支持公开检索；部分章节需要账号登录或 Token。桌面端生成 CBZ。";
     case "lnovel": return "中文轻小说目录、分卷与 TXT。首次加载目录最多等候 35 秒，之后复用缓存；也可用站点作品 ID / 链接直接检索。";
+    case "wenku8_epub": return "中文轻小说分卷 EPUB，保留正文和插图；书名、作者或文库 ID 均可检索。公开目录会更新，下载需能访问 GitHub；已下架作品不生成下载链接。";
     case "archive": return "Internet Archive 公开条目；附件格式及可访问性取决于原始发布者。";
     case "kungal": return "Galgame 资源索引；站外资源可能需要单独访问，网页链接不等同于文件直链。";
     case "vndb_release": return "VNDB 官方发行记录，中文优先；区分试玩、完整版和补丁，打开对应官网或商店获取游戏。";

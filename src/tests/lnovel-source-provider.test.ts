@@ -13,6 +13,32 @@ function response(body: unknown): { status: number; json: () => Promise<unknown>
 }
 
 describe("LNovelSourceProvider", () => {
+  it("exposes more than twelve matching works and pages the cached catalogue without duplicates", async () => {
+    const fetcher = vi.fn<JsonFetcher>().mockResolvedValue(response({ ok: true, data: Array.from({ length: 47 }, (_, index) => ({
+      nid: index + 1, name: `异世界作品 ${index + 1}`,
+    })) }));
+    const provider = new LNovelSourceProvider("https://pages.example", { fetcher });
+    const query = { keyword: "异世界", aliases: [], mediaType: "novel" as const };
+    const first = await provider.search(query);
+    const second = await provider.search({ ...query, page: 2 });
+    expect(first).toHaveLength(40);
+    expect(second.map((item) => item.sourceItemId)).toEqual(["41", "42", "43", "44", "45", "46", "47"]);
+    expect(new Set([...first, ...second].map((item) => item.sourceItemId)).size).toBe(47);
+    await expect(provider.search({ ...query, page: 3 })).resolves.toEqual([]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects invalid pages and does not repeat an explicit work ID on subsequent pages", async () => {
+    const fetcher = vi.fn<JsonFetcher>();
+    const provider = new LNovelSourceProvider("https://invalid-page.example", { fetcher });
+    const query = { keyword: "7", aliases: [], mediaType: "novel" as const };
+    for (const page of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+      await expect(provider.search({ ...query, page })).rejects.toThrow("页码无效");
+    }
+    await expect(provider.search({ ...query, page: 2 })).resolves.toEqual([]);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("shares and caches a slow catalogue request across provider instances", async () => {
     let calls = 0;
     let timeout: number | undefined;
