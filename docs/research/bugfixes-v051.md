@@ -1,6 +1,6 @@
 # 0.5.1：下载、阅读与旧 WebView 修复
 
-当前为**本地验收完成，待 GitHub 发布回验**。确定缺陷复现、源码修复和完整自动回归取得独立证据；便携包、综合清单、桌面入口和原用户资料保留均已完成。0.5.0 的发布身份保持，不移记为本版通过。
+**[0.5.1 已正式发布并通过附件回验](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.1)**。确定缺陷复现、源码修复、完整回归、原生样本、打包与资料保留均有独立证据；0.5.0身份保持，不移记为本版通过。
 
 ## 最终构建与原生范围
 
@@ -18,7 +18,9 @@ Windows `.work/v051-evidence/windows-native.json` 对应表中最终文件：构
 
 最终 Android 汇总 `.work/v051-evidence/android-native.json` 为 `passedWithinDocumentedScope=true`，19 份证据按 XML、截图与最终 APK 哈希独立核对；最终 PID 4189 返回桌面后保留、HOT 重开，保留的崩溃缓冲没有该 PID 崩溃。该模拟器不是旧 WebView，旧 API 缺失由自动回归验证；实体设备、ARM64 实机及反馈 5G 未测。
 
-本地便携 ZIP **9,689,891 字节**，SHA256 `63FE6156A89C89F8561940E110BBD8277C9A6B0D0454FB7F5DCC4A398C22C0C5`；12 白名单成员 CRC / 哈希通过。四产物综合清单、两套校验已齐，桌面0.5.1入口沿用旧Data、备份旧快捷方式。`data-preservation.json` 于 `2026-11-02T03:05:00Z` 为 passed：9表、3媒体、24旧EXE（含0.5.0）保持，数据库完整性ok。使用指南已打包冻结，剩源码 / 标签推送、9发布附件上传与实际下载回验。
+便携 ZIP **9,689,891 字节**，SHA256 `63FE6156A89C89F8561940E110BBD8277C9A6B0D0454FB7F5DCC4A398C22C0C5`，12白名单成员CRC / 哈希通过。综合清单、两套校验及桌面0.5.1入口已完成、沿用旧Data并备份快捷方式。`data-preservation.json` 最后 `2026-11-02T03:10:51Z` 为passed，9表、3媒体、24旧EXE保持、完整性ok。
+
+正式发布 `2026-11-02T03:12:39Z`；`github-published-verification.json` 于 `03:12:41Z` 为passed、公开仓库、非草稿。9附件实际下载大小 / SHA256 / GitHub API摘要、12 ZIP成员CRC / 逐项哈希、APK回执 / 证书身份及校验文件全部一致，无用户Data。`v0.5.1` 固定 `20c78dd094a61a6af4eaa187895844cb28ed99b2`，核验当时HEAD / main / tag一致；之后main只补文档回执，不改标签、源码、包内使用指南或发布附件。
 
 ## 已复现的问题与修复
 
@@ -40,7 +42,7 @@ Windows `.work/v051-evidence/windows-native.json` 对应表中最终文件：构
 - **阅读器失败前**：`.work/reader-audit/short-final-before` 保存短末章预期第二章、实际第一章的失败；`end-pages` 保存漫画末页预期页 3、实际页 2；`end-pages-fixed` 保存加入全屏后重开末章不在视口的失败。
 - **阅读器修复后**：完整 19 项浏览器通过，`.work/reader-audit/final-results.json` 为 19 通过、0 失败 / 跳过 / flaky。覆盖位置恢复、短末页、两种全屏、取消接续、重开时无用户阅读不自动跳转，真实再阅读到底才接续。固定本地响应测试不等于 Android / Windows 最终程序已实测。
 - **来源检查**：`.work/v051-evidence/source-management-fixed.json` 为 3 项通过，包含慢检查期间停用和改地址；首次测试失败与后续修正分别保留，不把测试控件定位修正误写成产品修复。
-- **本版完整源码回归**：`unit-final.json` 为 68 个唯一文件 / 714 项通过、0 失败，退出 0；`native-tests.log` 为 118 通过 / 2 默认忽略 / 0 失败。完整浏览器 `browser-final.json` 为 99 / 99 通过、退出 0，包含本轮兼容、阅读和来源检查场景。最终文件身份和原生验收取得后另补，不把固定响应自动化写成实体机通过。
+- **本版完整源码回归**：`unit-final.json` 为68个唯一文件 / 714项通过、0失败、退出0；`native-tests.log` 为118通过 / 2默认忽略 / 0失败。完整浏览器 `browser-final.json` 为99 / 99通过、退出0，包含兼容、阅读与来源检查。最终身份、原生和发布回验已列于上节，固定响应自动化仍不等于反馈实体手机通过。
 
 回执均在本地 `.work`，不随公开源码上传。新 helper 的循环 / Date 拒绝是旧环境范围限定；有原生 `structuredClone` 时保留原有语义，缓存并未改用 JSON stringify 丢失 undefined。
 

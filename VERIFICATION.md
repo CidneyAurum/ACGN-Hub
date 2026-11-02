@@ -1,8 +1,8 @@
 # ACGN Hub 验证记录
 
-## 最新增量：0.5.1 兼容与错误修复（本地验收完成，待 GitHub 回验）
+## 最新增量：0.5.1 兼容与错误修复（正式发布与附件回验完成）
 
-本轮缺陷复现、源码修复、完整回归、双端原生样本及本地打包已验证，综合清单、桌面入口和最终资料保留已完成；仅待GitHub源码 / 标签与9附件上传和实际回读。反馈手机的蜜柑失败缺少设备型号、WebView及手机浏览器结果，不能确认根因或声称实体手机已修复。
+本轮缺陷复现、源码修复、完整回归、双端原生样本、打包及GitHub附件实际回读完成，[0.5.1 已正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.1)。反馈手机的蜜柑失败缺少设备型号、WebView及手机浏览器结果，不能确认根因或声称实体手机已修复。
 
 | 检查 | 当前证据及范围 |
 | --- | --- |
@@ -17,8 +17,10 @@
 | Android 原生 | `android-native.json` 范围内通过：API 35 x86_64 覆盖升级保留 14 来源 / 1 启用；蜜柑 RSS100、真实 httpbin403、`pg11.txt` 170.2KB 完成 / 正文内读 / 全屏旋转后内容可读 / chooser取消。浏览器按钮启动成功，XML无正文故不称页面加载通过；横屏不额外声称布局尺寸测量。最终PID4189返回后台后HOT重开、无该PID崩溃记录；本机透明出口不证明反馈5G或旧WebView实体通过 |
 | 最终 Windows | `windows-native.json`：EXE **25,972,224 字节**、SHA256 `FDDF5A077F1CF1F242D360DC8A317FE19811C2273336482F57A3233FDA799A0A`；setup **7,315,624 字节**、`98F375449D5DA6A3AFCCAE8603013F0AF93E5EDA2C04CE24CEB640E66C23FE39`。扫描 / UIAutomation TXT+CBZ 全屏出入与已有进度、正常退出通过，无新增检测。未重下原文件或安装 NSIS，短末章仅自动回归 |
 | 本地包 / 入口 | 便携 ZIP **9,689,891 字节**，SHA256 `63FE6156A89C89F8561940E110BBD8277C9A6B0D0454FB7F5DCC4A398C22C0C5`；12 白名单成员 CRC / 哈希通过，四产物清单 / 校验齐全。桌面入口更新0.5.1，原Data沿用、旧快捷方式备份 |
-| 资料保留 | `.work/v051-evidence/data-preservation.json` 于 `2026-11-02T03:05:00Z` 为 **passed=true**；9表、3媒体、24旧EXE（含0.5.0）保持、数据库完整性ok |
-| 最终待验 | 仅GitHub源码 / 标签与9附件上传、实际下载大小 / SHA256 / API摘要及远端身份核对；0.5.0通过结果不移记 |
+| 资料保留 | `.work/v051-evidence/data-preservation.json` 最后 `2026-11-02T03:13:28Z` 为 **passed=true**；9表、3媒体、24旧EXE（含0.5.0）保持、数据库完整性ok |
+| GitHub回验 | `github-published-verification.json` 于 `2026-11-02T03:12:41Z` 为 **passed=true**，公开仓库、`isDraft=false`；9附件实际下载大小 / SHA256 / API digest一致、12 ZIP成员CRC / 哈希、APK回执 / 签名身份与两套校验通过，无用户Data |
+| 正式版本身份 | 发布 `2026-11-02T03:12:39Z`，标签 `v0.5.1` 固定提交 `20c78dd094a61a6af4eaa187895844cb28ed99b2`，核验当时HEAD / main / tag相同；之后main只补发布文档回执，不移动tag、不改源码或发布附件 |
+| 最终汇总 | `.work/v051-evidence/verification-final.json` 的8项 **allChecksPassed=true**；`downloaded-apk-verification.json` 用SDK对下载回读APK重验签名v2 / v3与对齐通过，SHA256仍为 `119035…F87A9`。测试应用、原生进程和模拟器均已退出，无残留 |
 
 缺失 API 已确定复现并修复，不证明它就是反馈手机的根因。Windows 透明路由环境的 HTTP 200 不能外推手机运营商网络，Chromium 87 构建目标也不是所有厂商 WebView 的实体支持证明。详细红绿和类别边界见[0.5.1 专项](docs/research/bugfixes-v051.md)，使用步骤见[本版指南](docs/releases/v0.5.1-usage.md)。
 

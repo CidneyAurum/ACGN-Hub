@@ -4,7 +4,7 @@
 
 **[下载已发布版本](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [0.5.1 使用指南](docs/releases/v0.5.1-usage.md) · [English](README.en.md)
 
-**0.5.1 已完成本地验收，待 GitHub 发布回验**，修复旧 WebView 兼容、下载完成边界与阅读进度；见[修复及诊断](docs/releases/v0.5.1-usage.md)。已发布的 [0.5.0](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.0) 继续可用。蜜柑在本机 API 35 模拟器读取成功，反馈手机根因仍未确认，不宣称其实体设备已修复。
+**[0.5.1 已正式发布并通过 9 附件下载回验](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.1)**，修复旧 WebView 兼容、下载完成边界与阅读进度；见[修复及诊断](docs/releases/v0.5.1-usage.md)。蜜柑在本机 API 35 模拟器读取成功，反馈手机根因仍未确认，不宣称其实体设备已修复。
 
 ## 发现、收藏，再慢慢看
 

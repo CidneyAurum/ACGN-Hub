@@ -4,7 +4,7 @@ A library for anime, manga, light novels and visual novels on Windows and Androi
 
 **[Download released builds](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [中文](README.md) · [0.5.1 user guide, Chinese](docs/releases/v0.5.1-usage.md)
 
-**Version 0.5.1 has completed local verification and awaits GitHub release verification**, addressing older WebView compatibility, completion boundaries and reading progress. See the [patch guide](docs/releases/v0.5.1-usage.md) and [fix record](docs/research/bugfixes-v051.md), in Chinese. Published [0.5.0](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.0) remains available. Mikan loads in the local API 35 emulator, but the cause on the reported physical phone remains unconfirmed.
+**[Version 0.5.1 is released, with all nine assets downloaded and verified](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.1)**, addressing older WebView compatibility, completion boundaries and reading progress. See the [patch guide](docs/releases/v0.5.1-usage.md) and [fix record](docs/research/bugfixes-v051.md), in Chinese. Mikan loads in the local API 35 emulator, but the cause on the reported physical phone remains unconfirmed.
 
 ## Features
 
