@@ -19,6 +19,27 @@ async function readSources(page: Page): Promise<SourceConfig[]> {
   return page.evaluate(() => JSON.parse(localStorage.getItem("acgn-hub.source-configs.v1") || "[]") as SourceConfig[]);
 }
 
+test("a blocked RSS source shows the HTTP status and offers a same-device browser check", async ({ page, browserErrors }) => {
+  const feed = "https://blocked.fixture.example.test/rss.xml";
+  await seedSources(page, [source("my:blocked", "rss", "连接诊断订阅", feed)]);
+  await page.route(feed, (route) => route.fulfill({ status: 403, contentType: "text/html", body: "Access denied" }));
+  await page.goto("/#/sources");
+  const row = page.locator("article.source-row");
+  await row.getByRole("button", { name: "检查连接", exact: true }).click();
+  await expect(row).toContainText("HTTP 403");
+  expect(browserErrors).toEqual(["console: Failed to load resource: the server responded with a status of 403 (Forbidden)"]);
+  browserErrors.splice(0); // The deliberately blocked HTTP response is the test input.
+  await expect(row).not.toContainText("无法连接 RSS/Atom 来源");
+  // The new browser tab is a separate Page, so page.route does not mock it.
+  await page.context().route(feed, (route) => route.fulfill({ status: 403, contentType: "text/html", body: "Access denied" }));
+  const popupEvent = page.waitForEvent("popup");
+  await row.getByRole("button", { name: "用浏览器检查", exact: true }).click();
+  const popup = await popupEvent;
+  await expect(popup).toHaveURL(feed);
+  await popup.close();
+  expect((await readSources(page))[0]).toMatchObject({ url: feed, enabled: true, lastHealth: { ok: false } });
+});
+
 test("source category filters preserve custom URLs, credentials and enabled states", async ({ page }) => {
   const sources = [
     source("my:mikan", "rss", "我的动画订阅", "https://mikanani.me/RSS/Classic", { enabled: false }),

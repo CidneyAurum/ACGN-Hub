@@ -4,6 +4,9 @@ import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
   plugins: [vue()],
+  // Android's OS version does not determine its independently updated WebView.
+  // Keep emitted syntax usable by older installations; runtime APIs are guarded.
+  build: { target: "chrome87" },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

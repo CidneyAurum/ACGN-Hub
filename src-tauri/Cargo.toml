@@ -1,6 +1,6 @@
 [package]
 name = "acgn-hub"
-version = "0.5.0"
+version = "0.5.1"
 description = "ACGN 作品发现、下载与离线阅读桌面应用"
 authors = ["ACGN Hub"]
 edition = "2021"

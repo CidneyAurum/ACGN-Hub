@@ -1,3 +1,4 @@
+import { timeoutSignal } from "@/shared/abort-signals";
 import { z } from "zod";
 import type { Media } from "@/domain/media";
 import { createJsonFetcher, type JsonFetcher } from "./json-transport";
@@ -16,7 +17,7 @@ export async function getDiscoveryCalendar(options: { refresh?: boolean; fetcher
   if (pending && !options.fetcher) return pending;
   const load = (async () => {
     try {
-      const response = await (options.fetcher ?? createJsonFetcher())("https://api.bgm.tv/calendar", { method: "GET", headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000), timeoutMs: 12000 });
+      const response = await (options.fetcher ?? createJsonFetcher())("https://api.bgm.tv/calendar", { method: "GET", headers: { Accept: "application/json" }, signal: timeoutSignal(12000), timeoutMs: 12000 });
       if (response.status !== 200) throw new Error("放送表暂时不可用（HTTP " + response.status + "）");
       const parsed = calendarSchema.safeParse(await response.json());
       if (!parsed.success || !parsed.data.length) throw new Error("放送表数据格式发生变化，请稍后重试");

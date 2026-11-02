@@ -1,5 +1,27 @@
 # ACGN Hub 验证记录
 
+## 最新增量：0.5.1 兼容与错误修复（本地验收完成，待 GitHub 回验）
+
+本轮缺陷复现、源码修复、完整回归、双端原生样本及本地打包已验证，综合清单、桌面入口和最终资料保留已完成；仅待GitHub源码 / 标签与9附件上传和实际回读。反馈手机的蜜柑失败缺少设备型号、WebView及手机浏览器结果，不能确认根因或声称实体手机已修复。
+
+| 检查 | 当前证据及范围 |
+| --- | --- |
+| 全量前端单测 | `.work/v051-evidence/unit-final.json`：68 文件 / **714 通过、0 失败、success=true** |
+| Rust | `.work/v051-evidence/native-tests.log`：**118 通过、2 默认忽略、0 失败**；Windows 主机运行，不代替 Android 设备 |
+| 完整浏览器 | `.work/v051-evidence/browser-final.json`：**99 / 99 通过**，退出 0；本轮兼容、阅读、来源检查定向结果另存，不与全量相加 |
+| 旧 WebView 失败与修复 | 删除 `structuredClone` 的元数据 / 作者单测在成功 HTTP 后 TypeError 失败，修复后兼容相关 154 项通过；浏览器同时删除 clone / hasOwn / at / AbortSignal 新 API，2 项完整流程通过，见 `.work/legacy-webview/final-results.json` |
+| 阅读器失败与修复 | 短末章目录退前章、短横末页页码退前页、全屏后重开丢位置均有失败 trace；修复后完整 19 项通过，见 `.work/reader-audit/final-results.json`，native / WebView fallback 及接续取消分别覆盖 |
+| 来源检查 | `.work/v051-evidence/source-management-fixed.json`：3 项通过，慢检查期间停用 / 改地址不被旧结果覆盖；浏览器无法细分的 Failed to fetch 保留通用网络失败 |
+| HTTP / 下载边界 | 本轮单测覆盖范围长度 / 实体标识、发布与取消恢复、已完成后暂停取消保护和诊断字段；最终 APK 新建 `pg11.txt` HTTP 下载完成、正文内读、全屏 / 旋转与系统选择器取消已实测，不代表穷举所有服务器 |
+| 最终 APK | `apk-verification.json`：**54,977,094 字节**，SHA256 `119035B60D558102E342D103A6B6302BBA6A28EA3124F37357DC6E7A018F87A9`，0.5.1 / 5001、min26 / target36、arm64-v8a + x86_64；签名 v2 / v3、CRC、16 KiB 对齐通过、证书沿用，无用户数据 / 密钥 |
+| Android 原生 | `android-native.json` 范围内通过：API 35 x86_64 覆盖升级保留 14 来源 / 1 启用；蜜柑 RSS100、真实 httpbin403、`pg11.txt` 170.2KB 完成 / 正文内读 / 全屏旋转后内容可读 / chooser取消。浏览器按钮启动成功，XML无正文故不称页面加载通过；横屏不额外声称布局尺寸测量。最终PID4189返回后台后HOT重开、无该PID崩溃记录；本机透明出口不证明反馈5G或旧WebView实体通过 |
+| 最终 Windows | `windows-native.json`：EXE **25,972,224 字节**、SHA256 `FDDF5A077F1CF1F242D360DC8A317FE19811C2273336482F57A3233FDA799A0A`；setup **7,315,624 字节**、`98F375449D5DA6A3AFCCAE8603013F0AF93E5EDA2C04CE24CEB640E66C23FE39`。扫描 / UIAutomation TXT+CBZ 全屏出入与已有进度、正常退出通过，无新增检测。未重下原文件或安装 NSIS，短末章仅自动回归 |
+| 本地包 / 入口 | 便携 ZIP **9,689,891 字节**，SHA256 `63FE6156A89C89F8561940E110BBD8277C9A6B0D0454FB7F5DCC4A398C22C0C5`；12 白名单成员 CRC / 哈希通过，四产物清单 / 校验齐全。桌面入口更新0.5.1，原Data沿用、旧快捷方式备份 |
+| 资料保留 | `.work/v051-evidence/data-preservation.json` 于 `2026-11-02T03:05:00Z` 为 **passed=true**；9表、3媒体、24旧EXE（含0.5.0）保持、数据库完整性ok |
+| 最终待验 | 仅GitHub源码 / 标签与9附件上传、实际下载大小 / SHA256 / API摘要及远端身份核对；0.5.0通过结果不移记 |
+
+缺失 API 已确定复现并修复，不证明它就是反馈手机的根因。Windows 透明路由环境的 HTTP 200 不能外推手机运营商网络，Chromium 87 构建目标也不是所有厂商 WebView 的实体支持证明。详细红绿和类别边界见[0.5.1 专项](docs/research/bugfixes-v051.md)，使用步骤见[本版指南](docs/releases/v0.5.1-usage.md)。
+
 ## 最新增量：0.5.0 Windows / Android（正式发布与附件回验完成）
 
 最终 Windows EXE / NSIS、便携 ZIP 和 Android APK 已完成打包、静态检查、原生样本与 GitHub 附件实际下载回验，[0.5.0 已正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.0)。综合清单、桌面入口与原用户资料复核通过，测试模拟器及本项目测试进程已退出。各阶段只按自身文件身份记录，不把旧候选下载移记到最终包。

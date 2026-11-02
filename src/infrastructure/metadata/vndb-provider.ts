@@ -1,3 +1,4 @@
+import { timeoutSignal } from "@/shared/abort-signals";
 import { z } from "zod";
 import type { MetadataProvider, MetadataSearchQuery } from "@/application/metadata-ports";
 import type { Media, MediaDetails } from "@/domain/media";
@@ -254,7 +255,7 @@ export class VndbProvider implements MetadataProvider {
             "X-ACGN-Hub-Client": this.userAgent,
           },
           body: JSON.stringify(body),
-          signal: AbortSignal.timeout(10_000),
+          signal: timeoutSignal(10_000),
         });
         if (response.status >= 200 && response.status < 300) {
           return { status: response.status, body: await parseJsonResponse(response, VndbProviderError) };

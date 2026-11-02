@@ -1,3 +1,4 @@
+import { timeoutSignal } from "@/shared/abort-signals";
 import { invoke } from "@tauri-apps/api/core";
 import { z } from "zod";
 import type {
@@ -38,7 +39,7 @@ export class FetchAria2Transport implements Aria2RpcTransport {
       : request.params;
     const response = await fetch(request.endpoint, {
       method: "POST",
-      signal: AbortSignal.timeout(15_000),
+      signal: timeoutSignal(15_000),
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         jsonrpc: "2.0",
@@ -132,7 +133,9 @@ export class Aria2Client implements DownloadEngine {
   }
 
   async pause(engineTaskId: string): Promise<void> {
-    for (const item of await this.controlTargets(engineTaskId)) {
+    const targets = await this.controlTargets(engineTaskId);
+    this.requireUnfinishedTargets(targets);
+    for (const item of targets) {
       if (item.status.status === "active" || item.status.status === "waiting") await this.call("aria2.pause", [item.id]);
     }
   }
@@ -149,11 +152,19 @@ export class Aria2Client implements DownloadEngine {
     let targets: Array<{ id: string; status: Aria2StatusResponse }>;
     try { targets = await this.controlTargets(engineTaskId); }
     catch (cause) { if (isTaskNotFoundError(cause)) return; throw cause; }
+    this.requireUnfinishedTargets(targets);
     for (const item of targets) {
       if (["active", "waiting", "paused"].includes(item.status.status)) {
         try { await this.call("aria2.forceRemove", [item.id]); }
         catch (cause) { if (!isTaskNotFoundError(cause)) throw cause; }
       }
+    }
+  }
+
+  private requireUnfinishedTargets(targets: Array<{ id: string; status: Aria2StatusResponse }>): void {
+    const leaves = targets.filter((item) => !item.status.followedBy?.length);
+    if (leaves.length && leaves.every((item) => item.status.status === "complete")) {
+      throw new Error("文件已完成下载，请刷新后查看成品");
     }
   }
 

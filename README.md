@@ -2,9 +2,9 @@
 
 为喜欢的故事留一个位置。面向 Windows 与 Android 的动画、漫画、轻小说与 Galgame 收藏工作台，将作品发现、资源检索、下载整理和离线阅读放在一起。
 
-**[下载已发布版本](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [0.5.0 使用指南](docs/releases/v0.5.0-usage.md) · [English](README.en.md)
+**[下载已发布版本](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [0.5.1 使用指南](docs/releases/v0.5.1-usage.md) · [English](README.en.md)
 
-**[0.5.0 已正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.0)**，提供 Windows EXE、便携 ZIP 与 Android APK。9 个附件均已实际下载回验，大小、SHA256 与 GitHub 摘要一致。Android 已实测 HTTP 暂停续传、重启恢复、小说下载与内置阅读；使用与验证范围见[指南](docs/releases/v0.5.0-usage.md)。
+**0.5.1 已完成本地验收，待 GitHub 发布回验**，修复旧 WebView 兼容、下载完成边界与阅读进度；见[修复及诊断](docs/releases/v0.5.1-usage.md)。已发布的 [0.5.0](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.0) 继续可用。蜜柑在本机 API 35 模拟器读取成功，反馈手机根因仍未确认，不宣称其实体设备已修复。
 
 ## 发现、收藏，再慢慢看
 
@@ -147,10 +147,12 @@ powershell -NoProfile -File .\src-tauri\scripts\build-android.ps1 -Action build
 
 ## 验证与文档
 
-源码回归通过 **670 项前端单测、91 项完整浏览器交互、109 项 Rust 测试**，另 2 项 Rust 默认忽略。最终 Windows 程序实际读取 TXT / CBZ 并恢复阅读位置；最终 Android APK 实测 HTTP 暂停、结束进程后的冷启动续传、TXT 完整下载与内读、同作品卷间切换，以及旧漫画页码恢复。漫画触屏与 TXT / CBZ 选择器另有阶段样本。原用户数据库 9 表、3 个媒体和 22 个旧程序复核保持。具体文件身份、API 35 模拟器与未覆盖范围见[验证记录](VERIFICATION.md)。完整 Galgame 下载、安装及运行尚未验收；EPUB / PDF 不使用内置阅读器。
+0.5.1 回归通过 **714 项前端单测、99 项完整浏览器交互、118 项 Rust 测试**，另 2 项 Rust 默认忽略。最终 Windows 程序实测既有 TXT / CBZ 内读、全屏与进度；Android API 35 模拟器升级保留14来源 / 1启用，读取蜜柑100项、显示HTTP403、完成170.2KB文本下载 / 内读 / 旋转与选择器取消。原9表、3媒体和24个旧程序保持。0.5.0 的大文件暂停续传及卷间切换作为历史样本单列；具体身份与未覆盖范围见[验证记录](VERIFICATION.md)。完整 Galgame 安装运行与反馈实体手机均未验收；EPUB / PDF 不使用内置阅读器。
 
 | 文档 | 内容 |
 | --- | --- |
+| [0.5.1 使用指南](docs/releases/v0.5.1-usage.md) | 兼容补丁、升级与 Android 来源失败排查 |
+| [0.5.1 修复记录](docs/research/bugfixes-v051.md) | 确定复现、修复前后测试及手机网络诊断边界 |
 | [0.5.0 使用指南](docs/releases/v0.5.0-usage.md) | Windows / Android 安装、下载、手机存储、阅读与开发构建 |
 | [Android 构建与验证](docs/research/android-v050.md) | 双架构 APK 身份、签名、实际设备样本与验证边界 |
 | [0.4.0 使用指南](docs/releases/v0.4.0-usage.md) | 已发布 Windows 版本的首次启动、来源选择、阅读与便携升级 |

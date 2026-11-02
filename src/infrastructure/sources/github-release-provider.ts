@@ -1,3 +1,4 @@
+import { timeoutSignal } from "@/shared/abort-signals";
 import { z } from "zod";
 import type { SourceProvider, SourceHealth, SourceSearchQuery, SourceSearchResult } from "@/application/source-ports";
 import { parseDownloadTarget } from "@/shared/validation";
@@ -164,7 +165,7 @@ export class GithubReleaseSourceProvider implements SourceProvider {
         const response = await this.fetcher(this.apiUrl, {
           method: "GET",
           headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
-          signal: AbortSignal.timeout(this.timeoutMs),
+          signal: timeoutSignal(this.timeoutMs),
         });
         if (response.status >= 200 && response.status < 300) {
           const parsed = releasesSchema.safeParse(await response.json());
@@ -193,7 +194,7 @@ export class GithubReleaseSourceProvider implements SourceProvider {
     const response = await this.textFetcher(atomUrl, {
       method: "GET",
       headers: { Accept: "application/atom+xml, application/xml, text/xml" },
-      signal: AbortSignal.timeout(this.timeoutMs),
+      signal: timeoutSignal(this.timeoutMs),
     });
     if (response.status < 200 || response.status >= 300) {
       throw new Error("GitHub Releases Atom HTTP " + response.status);
@@ -218,7 +219,7 @@ export class GithubReleaseSourceProvider implements SourceProvider {
       const response = await this.textFetcher(release.html_url, {
         method: "GET",
         headers: { Accept: "text/html, application/xhtml+xml" },
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: timeoutSignal(this.timeoutMs),
       });
       if (response.status < 200 || response.status >= 300) return;
       release.assets = extractHtmlReleaseAssets(await response.text());
@@ -238,7 +239,7 @@ function extractHtmlReleaseAssets(html: string): Array<z.infer<typeof releaseAss
       const url = new URL(rawHref, "https://github.com");
       if (url.hostname.toLowerCase() !== "github.com" || seen.has(url.toString())) continue;
       const segments = url.pathname.split("/").filter(Boolean);
-      const name = decodeUrlSegment(segments.at(-1) ?? "");
+      const name = decodeUrlSegment(segments[segments.length - 1] ?? "");
       if (segments.length < 5 || !name) continue;
       seen.add(url.toString());
       assets.push({ id: "html:" + (assets.length + 1), name, browser_download_url: url.toString() });

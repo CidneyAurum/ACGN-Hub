@@ -72,6 +72,9 @@ let autoTimer: ReturnType<typeof setInterval> | undefined;
 let autoCheckTimer: ReturnType<typeof setTimeout> | undefined;
 let suppressReadingScrollUntil = 0;
 let userReadingInputUntil = 0;
+let textLayoutPosition: { sessionId: string; fraction: number; width: number; height: number } | undefined;
+let textLayoutFrame = 0;
+let textResizeObserver: ResizeObserver | undefined;
 const flowElements = new Map<number, HTMLElement>();
 let swipeStart: { x: number; y: number; time: number } | undefined;
 
@@ -246,7 +249,18 @@ function jumpNovelChapter(): void {
 function updateNovelChapter(): void {
   const current = textArea.value;
   if (!current || !novel.value.chapters.length) return;
-  const marker = current.getBoundingClientRect().top + 75;
+  const bounds = current.getBoundingClientRect();
+  const marker = bounds.top + 75;
+  // A short final chapter cannot reach the top marker: the scroll container
+  // stops while its heading is still lower in the viewport. Keep that visible
+  // ending selected rather than reporting the previous chapter at book end.
+  const final = novel.value.chapters[novel.value.chapters.length - 1];
+  const finalHeading = current.querySelector<HTMLElement>(`[id="${final.id}"]`);
+  if (current.scrollTop > 0 && current.scrollHeight - current.clientHeight - current.scrollTop <= 2
+    && finalHeading && finalHeading.getBoundingClientRect().top < bounds.bottom) {
+    novelChapter.value = final.id;
+    return;
+  }
   let selected = novel.value.chapters[0].id;
   for (const chapter of novel.value.chapters) {
     const heading = current.querySelector<HTMLElement>(`[id="${chapter.id}"]`);
@@ -299,6 +313,10 @@ function updateFlowPosition(): void {
     const nextDistance = marker < box.top ? box.top - marker : marker > box.bottom ? marker - box.bottom : 0;
     if (nextDistance < distance) { closest = index; distance = nextDistance; }
   }
+  const final = pageCount.value - 1;
+  const finalBox = flowElements.get(final)?.getBoundingClientRect();
+  if (stage.value.scrollTop > 0 && stage.value.scrollHeight - stage.value.clientHeight - stage.value.scrollTop <= 2
+    && finalBox && finalBox.top < bounds.bottom && finalBox.bottom > bounds.top) closest = final;
   flowCenter.value = closest;
   page.value = closest; requestedPage.value = closest + 1;
   const image = flowElements.get(closest)?.querySelector("img");
@@ -380,6 +398,26 @@ function persistPosition(value: number): void {
   catch { storageWarning.value = true; }
 }
 
+function rememberTextLayout(): void {
+  const current = textArea.value;
+  if (!current || session.value?.kind !== "text" || current.dataset.viewerSession !== session.value.sessionId) return;
+  const maximum = Math.max(0, current.scrollHeight - current.clientHeight);
+  textLayoutPosition = { sessionId: session.value.sessionId, fraction: maximum ? current.scrollTop / maximum : 0,
+    width: current.clientWidth, height: current.clientHeight };
+}
+
+function restoreTextLayout(): void {
+  if (textLayoutFrame || !textLayoutPosition) return;
+  textLayoutFrame = requestAnimationFrame(() => {
+    textLayoutFrame = 0;
+    const current = textArea.value;
+    const saved = textLayoutPosition;
+    if (disposed || !current || !saved || current.dataset.viewerSession !== saved.sessionId) return;
+    current.scrollTop = saved.fraction * Math.max(0, current.scrollHeight - current.clientHeight);
+    rememberTextLayout(); updateNovelChapter();
+  });
+}
+
 function savePosition(): void {
   if (session.value?.kind === "comic") {
     if (comicMode.value === "continuous") updateFlowPosition();
@@ -391,6 +429,11 @@ function savePosition(): void {
   } else if (session.value?.kind === "text" && textArea.value) {
     const current = textArea.value;
     if (current.dataset.viewerSession !== session.value.sessionId) return;
+    const saved = textLayoutPosition;
+    if (saved?.sessionId === session.value.sessionId
+      && (textLayoutFrame || saved.width !== current.clientWidth || saved.height !== current.clientHeight)) {
+      persistPosition(saved.fraction); return;
+    }
     const maximum = current.scrollHeight - current.clientHeight;
     persistPosition(maximum > 0 ? Math.min(1, Math.max(0, current.scrollTop / maximum)) : 0);
   }
@@ -401,6 +444,9 @@ function resetStage(): void {
   if (autoCheckTimer) clearTimeout(autoCheckTimer);
   autoCheckTimer = undefined;
   if (textSaveTimer) { clearTimeout(textSaveTimer); textSaveTimer = undefined; }
+  if (textLayoutFrame) cancelAnimationFrame(textLayoutFrame);
+  textLayoutFrame = 0; textLayoutPosition = undefined;
+  textResizeObserver?.disconnect(); textResizeObserver = undefined;
   clearPrefetch();
   stopFlow();
   const currentVideo = video.value;
@@ -456,6 +502,14 @@ async function loadViewer(): Promise<void> {
         current.scrollTop = Math.min(1, Math.max(0, rememberedPosition ?? 0)) * Math.max(0, current.scrollHeight - current.clientHeight);
         novelChapter.value = novel.value.chapters[0]?.id ?? "";
         updateNovelChapter();
+        rememberTextLayout();
+        if (typeof ResizeObserver !== "undefined") {
+          textResizeObserver = new ResizeObserver(() => {
+            const saved = textLayoutPosition;
+            if (saved && (saved.width !== current.clientWidth || saved.height !== current.clientHeight)) restoreTextLayout();
+          });
+          textResizeObserver.observe(current);
+        }
       }
     }
   } catch (cause) {
@@ -546,6 +600,13 @@ function videoProgress(event: Event): void {
 
 function textScrolled(event: Event): void {
   if (event.currentTarget !== textArea.value || textArea.value?.dataset.viewerSession !== session.value?.sessionId) return;
+  const current = textArea.value;
+  // Fullscreen / viewport changes may clamp scrollTop before their resize
+  // callback. Keep the last reading fraction until the new layout is restored.
+  if (textLayoutPosition && (textLayoutFrame || textLayoutPosition.width !== current.clientWidth || textLayoutPosition.height !== current.clientHeight)) {
+    restoreTextLayout(); return;
+  }
+  rememberTextLayout();
   if (textSaveTimer) clearTimeout(textSaveTimer);
   if (Date.now() < userReadingInputUntil) readingInteracted.value = true;
   textSaveTimer = setTimeout(() => { textSaveTimer = undefined; savePosition(); updateNovelChapter(); checkAutoContinue(); }, 300);
@@ -583,6 +644,7 @@ function fullscreenChanged(): void {
   // some WebViews. Their equality must never be mistaken for an active reader.
   fullScreen.value = immersive.value || Boolean(surface.value && document.fullscreenElement === surface.value);
   if (comicMode.value === "continuous") void scrollFlowTo(page.value);
+  if (session.value?.kind === "text") restoreTextLayout();
 }
 function settingsChanged(): void { settingsRevision.value++; }
 function visibilityChanged(): void { if (document.visibilityState === "hidden") { savePosition(); cancelAutoContinue(); } }

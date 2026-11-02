@@ -31,5 +31,15 @@ export class MobileHttpClient implements DownloadEngine {
     const status = await invoke<NativeStatus>("mobile_http_cancel", { taskId });
     if (status?.state === "completed") throw new Error("文件已完成下载，请刷新后查看成品");
   }
-  async status(taskId: string): Promise<DownloadStatus> { return normalizeStatus(await invoke<NativeStatus>("mobile_http_status", { taskId })); }
+  async status(taskId: string): Promise<DownloadStatus> {
+    try { return normalizeStatus(await invoke<NativeStatus>("mobile_http_status", { taskId })); }
+    catch (cause) {
+      const message = cause instanceof Error ? cause.message : cause;
+      // Only the native missing-record result permits re-submitting a URL.
+      // Corrupt records, permissions and network failures must stay visible.
+      if (message !== "没有找到安卓下载记录；请从资源页重新添加") throw cause;
+      return { state: "failed", totalBytes: 0, completedBytes: 0, speedBytesPerSecond: 0, files: [],
+        errorCode: "ENGINE_TASK_NOT_FOUND", error: message };
+    }
+  }
 }

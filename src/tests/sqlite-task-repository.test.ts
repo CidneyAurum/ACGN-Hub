@@ -22,9 +22,25 @@ const task: DownloadTask = {
 };
 
 beforeEach(() => { state.db = new DatabaseSync(":memory:"); });
-afterEach(() => { state.db?.close(); });
+afterEach(() => { state.db?.close(); vi.unstubAllGlobals(); });
 
 describe("SqliteTaskRepository with an isolated SQLite database", () => {
+  it("restores naming and diagnostics without Object.hasOwn and ignores identity injection", async () => {
+    const original = Object.hasOwn;
+    Object.hasOwn = undefined as never;
+    let restored: DownloadTask | undefined;
+    try {
+      const repository = new SqliteTaskRepository();
+      await repository.initialize();
+      await repository.insert(task);
+      state.db!.prepare("UPDATE download_tasks SET diagnostics_json = ?, naming_json = ? WHERE id = ?").run(
+        JSON.stringify({ stage: "connecting", peers: 0, id: "injected", directory: "D:\\other", hasOwnProperty: false }),
+        JSON.stringify({ status: "renamed", originalFileName: "old.zip", originalPath: "D:\\Incoming\\old.zip", currentFileName: "new.zip", id: "injected" }), task.id);
+      restored = await repository.findById(task.id);
+    } finally { Object.hasOwn = original; }
+    expect(restored).toMatchObject({ id: task.id, directory: task.directory, stage: "connecting", peers: 0,
+      naming: { status: "renamed", originalFileName: "old.zip", currentFileName: "new.zip" } });
+  });
   it("preserves BT stages, peer counts and verification details through restart and clears them explicitly", async () => {
     const repository = new SqliteTaskRepository();
     await repository.initialize();

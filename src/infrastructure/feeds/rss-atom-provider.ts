@@ -1,3 +1,4 @@
+import { timeoutSignal, disposeAbortSignal } from "@/shared/abort-signals";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 import type { FeedProvider, TextFetcher } from "@/application/feed-ports";
 import type { FeedDocument, FeedEnclosure, FeedItem } from "@/domain/feed";
@@ -6,6 +7,7 @@ import { MinIntervalLimiter, type Sleep } from "@/infrastructure/metadata/rate-l
 import { createTextFetcher } from "./text-transport";
 import { parseDownloadTarget } from "@/shared/validation";
 import { isTimeoutError } from "@/infrastructure/metadata/response-errors";
+import { abortableRequest } from "@/infrastructure/metadata/abortable-request";
 
 const XML_PARSER = new XMLParser({
   ignoreAttributes: false,
@@ -17,7 +19,7 @@ const XML_PARSER = new XMLParser({
   parseAttributeValue: false,
 });
 
-export type FeedErrorCode = "bad_request" | "rate_limited" | "server_error" | "not_found" | "network" | "invalid_response" | "timeout" | "unauthorized" | "forbidden";
+export type FeedErrorCode = "bad_request" | "rate_limited" | "server_error" | "not_found" | "network" | "dns" | "tls" | "connection" | "read" | "invalid_response" | "timeout" | "unauthorized" | "forbidden";
 
 export class FeedProviderError extends Error {
   constructor(readonly code: FeedErrorCode, message: string, readonly status?: number) {
@@ -68,15 +70,16 @@ export class RssAtomProvider implements FeedProvider {
     let attempt = 0;
     while (true) {
       await this.limiter.wait();
+      const signal = timeoutSignal(this.timeoutMs);
       try {
         const init = {
           method: "GET",
           headers: { Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml" },
-          signal: AbortSignal.timeout(this.timeoutMs),
+          signal,
           timeoutMs: this.timeoutMs,
         };
-        const response = await this.fetcher(url, init);
-        if (response.status >= 200 && response.status < 300) return await response.text();
+        const response = await abortableRequest(() => this.fetcher(url, init), init.signal);
+        if (response.status >= 200 && response.status < 300) return await abortableRequest(() => response.text(), init.signal);
         if ((response.status === 429 || response.status >= 500) && attempt < this.maxRetries) {
           attempt += 1;
           await this.delay(250 * 2 ** (attempt - 1));
@@ -90,15 +93,38 @@ export class RssAtomProvider implements FeedProvider {
           await this.delay(250 * 2 ** (attempt - 1));
           continue;
         }
-        if (isTimeoutError(cause)) throw new FeedProviderError("timeout", "RSS/Atom 请求超时，请稍后重试");
-        throw new FeedProviderError("network", "无法连接 RSS/Atom 来源");
-      }
+        throw feedRequestError(cause);
+      } finally { disposeAbortSignal(signal); }
     }
   }
 
   private async delay(milliseconds: number): Promise<void> {
     await this.sleep(milliseconds);
   }
+}
+
+/** Classify transport failures without putting URLs, tokens or raw response text in the UI. */
+export function feedRequestError(cause: unknown): FeedProviderError {
+  if (cause instanceof FeedProviderError) return cause;
+  const message = cause instanceof Error ? cause.message : typeof cause === "string" ? cause : "";
+  const prefix = message.match(/^\[(NETWORK_[A-Z]+)\]/)?.[1];
+  if (prefix === "NETWORK_TIMEOUT" || isTimeoutError(cause)) return new FeedProviderError("timeout", "RSS/Atom 请求超时，请稍后重试");
+  if (prefix === "NETWORK_DNS" || /dns error|dns lookup|name resolution|failed to lookup|unable to resolve host|ENOTFOUND|EAI_AGAIN|ERR_NAME_NOT_RESOLVED/i.test(message)) {
+    return new FeedProviderError("dns", "RSS/Atom 域名解析失败（DNS），请检查当前网络的解析结果");
+  }
+  if (prefix === "NETWORK_TLS" || /certificate|cert_authority|TLS|SSL|sslhandshake|handshake failure|cert_verify/i.test(message)) {
+    return new FeedProviderError("tls", "RSS/Atom HTTPS 证书或握手失败（TLS），请检查系统时间与网络环境");
+  }
+  if (prefix === "NETWORK_CONNECT" || /connection refused|connect error|connection reset|ECONNREFUSED|ECONNRESET|ENETUNREACH|EHOSTUNREACH|ERR_CONNECTION_/i.test(message)) {
+    return new FeedProviderError("connection", "RSS/Atom 无法建立网络连接，请检查当前网络是否能访问该站点");
+  }
+  if (prefix === "NETWORK_READ" || /error decoding response|error reading|body error|response.*(?:read|stream).*fail/i.test(message)) {
+    return new FeedProviderError("read", "RSS/Atom 网络响应读取失败，请稍后重试");
+  }
+  if (cause instanceof TypeError && /fetch|network/i.test(message)) {
+    return new FeedProviderError("network", "RSS/Atom 网络请求失败；浏览器未提供 DNS、TLS 或跨域限制的具体原因");
+  }
+  return new FeedProviderError("network", "RSS/Atom 网络请求失败；未取得可确认的 DNS、TLS 或 HTTP 错误信息");
 }
 
 export function parseFeedXml(xml: string, sourceUrl = "fixture://feed"): FeedDocument {
@@ -266,12 +292,12 @@ function isAllowedEnclosureUrl(rawUrl: string): boolean {
 }
 
 function errorForStatus(status: number): FeedProviderError {
-  if (status === 401) return new FeedProviderError("unauthorized", "Feed 需要登录认证", status);
-  if (status === 403) return new FeedProviderError("forbidden", "Feed 拒绝访问", status);
-  if (status === 400) return new FeedProviderError("bad_request", "Feed 请求参数无效", status);
-  if (status === 404) return new FeedProviderError("not_found", "Feed 地址不存在", status);
-  if (status === 429) return new FeedProviderError("rate_limited", "Feed 请求过于频繁", status);
-  if (status >= 500) return new FeedProviderError("server_error", "Feed 服务暂时不可用", status);
+  if (status === 401) return new FeedProviderError("unauthorized", "Feed 需要认证（HTTP 401）", status);
+  if (status === 403) return new FeedProviderError("forbidden", "Feed 拒绝访问（HTTP 403），请检查站点访问限制", status);
+  if (status === 400) return new FeedProviderError("bad_request", "Feed 请求参数无效（HTTP 400）", status);
+  if (status === 404) return new FeedProviderError("not_found", "Feed 地址不存在（HTTP 404）", status);
+  if (status === 429) return new FeedProviderError("rate_limited", "Feed 请求过于频繁（HTTP 429）", status);
+  if (status >= 500) return new FeedProviderError("server_error", `Feed 服务暂时不可用（HTTP ${status}）`, status);
   return new FeedProviderError("network", `Feed HTTP ${status}`, status);
 }
 

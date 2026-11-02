@@ -177,7 +177,7 @@ async fn metadata_json_request(
     let response = request
         .send()
         .await
-        .map_err(|error| format!("连接元数据 API 失败：{error}"))?;
+        .map_err(|error| network::request_error(&error))?;
     let status = response.status().as_u16();
     let bytes = read_http_bytes(response, 8 * 1024 * 1024).await?;
     let body = match serde_json::from_slice::<Value>(&bytes) {
@@ -1060,7 +1060,7 @@ async fn feed_text_request(
     let response = request
         .send()
         .await
-        .map_err(|error| format!("连接 Feed 失败：{error}"))?;
+        .map_err(|error| network::request_error(&error))?;
     let status = response.status().as_u16();
     let bytes = read_http_bytes(response, 16 * 1024 * 1024).await?;
     let body = String::from_utf8(bytes).map_err(|_| "Feed 响应不是有效 UTF-8 文本")?;
@@ -1083,7 +1083,7 @@ async fn read_http_bytes(mut response: reqwest::Response, limit: usize) -> Resul
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|error| format!("读取 HTTP 响应失败：{error}"))?
+        .map_err(|error| network::request_error(&error))?
     {
         if bytes.len().saturating_add(chunk.len()) > limit {
             return Err("HTTP 响应超过允许大小".to_string());

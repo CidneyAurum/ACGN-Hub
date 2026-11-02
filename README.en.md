@@ -2,9 +2,9 @@
 
 A library for anime, manga, light novels and visual novels on Windows and Android. Discover works, compare sources, manage downloads and read your offline collection in one place.
 
-**[Download released builds](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [中文](README.md) · [0.5.0 user guide, Chinese](docs/releases/v0.5.0-usage.md)
+**[Download released builds](https://github.com/CidneyAurum/ACGN-Hub/releases/latest)** · [中文](README.md) · [0.5.1 user guide, Chinese](docs/releases/v0.5.1-usage.md)
 
-**[Version 0.5.0 is released](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.0)** with Windows EXE, portable ZIP and Android APK downloads. All nine release assets were downloaded and verified against their sizes, SHA256 hashes and GitHub digests. Android samples include HTTP pause / resume, recovery after process termination, novel downloads and built-in reading; see the [0.5.0 guide](docs/releases/v0.5.0-usage.md) for verification scope.
+**Version 0.5.1 has completed local verification and awaits GitHub release verification**, addressing older WebView compatibility, completion boundaries and reading progress. See the [patch guide](docs/releases/v0.5.1-usage.md) and [fix record](docs/research/bugfixes-v051.md), in Chinese. Published [0.5.0](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.0) remains available. Mikan loads in the local API 35 emulator, but the cause on the reported physical phone remains unconfirmed.
 
 ## Features
 
@@ -117,7 +117,7 @@ The default build includes arm64 and x86_64. Packaging copies verified native li
 
 ## Verification and credits
 
-Source regressions pass **670 frontend tests, all 91 browser tests and 109 Rust tests**, with 2 Rust tests ignored by default. The final Windows build opens TXT / CBZ files with saved reading positions. The final Android APK completes an HTTP file after pausing, process termination and a cold restart; it also downloads and reads a full novel volume, switches between downloaded volumes and restores an existing comic page. Touch paging and TXT / CBZ choosers have additional stage-build samples. The original 9 database tables, 3 media files and 22 older executables remain intact. See the [verification record](VERIFICATION.md) for exact build identities, API 35 emulator scope and untested environments. A complete visual-novel download, installation and launch has not been verified. EPUB and PDF are not supported by the built-in readers.
+Version 0.5.1 passes **714 frontend tests, all 99 browser tests and 118 Rust tests**, with 2 Rust tests ignored by default. Native Windows samples open existing TXT / CBZ files with fullscreen and saved positions. The API 35 Android emulator preserves 14 sources / 1 enabled source after upgrading, reads a 100-item Mikan feed, displays HTTP403 and completes a 170.2 KB text download with reading, rotation and chooser cancellation. The original 9 database tables, 3 media files and 24 older executables remain intact. Large-file pause / resume and volume-switching samples from 0.5.0 remain historical; see the [verification record](VERIFICATION.md) for exact identities and scope. Full game installation / launch and the reported physical phone are not verified. EPUB and PDF require external readers.
 
 See the [verification record](VERIFICATION.md), [0.5.0 guide](docs/releases/v0.5.0-usage.md), [released 0.4.0 guide](docs/releases/v0.4.0-usage.md), [archived README](HISTORY.md) and [third-party notices](THIRD_PARTY_NOTICES.md). The archive preserves historical wording and original path references.
 

@@ -3,6 +3,11 @@ import { DownloadManager } from "@/application/download-manager";
 import type { DownloadEngine, TaskRepository } from "@/application/ports";
 import type { DownloadStatus, DownloadTask } from "@/domain/download";
 import { getCompletedDownloadFiles, getCompletedDownloadOutputs } from "@/domain/download-output";
+import { Aria2Client, type Aria2RpcRequest } from "@/infrastructure/aria2/aria2-client";
+import { MobileHttpClient } from "@/infrastructure/download/mobile-http-client";
+
+const { nativeInvoke } = vi.hoisted(() => ({ nativeInvoke: vi.fn() }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: nativeInvoke }));
 
 function task(overrides: Partial<DownloadTask> = {}): DownloadTask {
   return { id: "one", engineId: "aria2", sourceUrl: "https://example.org/one.zip", protocol: "http", directory: "C:\\Downloads", state: "queued", totalBytes: 0, completedBytes: 0, speedBytesPerSecond: 0, files: [], dedupeKey: "one", createdAt: "2026-10-01", updatedAt: "2026-10-01", ...overrides };
@@ -21,7 +26,7 @@ function fixture(initial: DownloadTask[] = [], slots = 1) {
   const engine: DownloadEngine = { id: "aria2", add: vi.fn(async () => "remote-one"), pause: vi.fn(async () => undefined), resume: vi.fn(async () => undefined), cancel: vi.fn(async () => undefined), status: vi.fn(async () => status) };
   const resolve = vi.fn((_id: string, _endpoint?: string) => engine);
   const completed = vi.fn();
-  const settings: { maxConcurrentDownloads: number; speedLimitBytesPerSecond: number; aria2Endpoint?: string } = { maxConcurrentDownloads: slots, speedLimitBytesPerSecond: 0 };
+  const settings: { maxConcurrentDownloads: number; speedLimitBytesPerSecond: number; aria2Endpoint?: string; httpDownloadEngine?: "aria2" | "mobile_http" } = { maxConcurrentDownloads: slots, speedLimitBytesPerSecond: 0 };
   const manager = new DownloadManager({ repository, engine: resolve, settings: () => settings, onChange: (next) => { tasks = next; }, onComplete: completed });
   return { manager, engine, repository, resolve, completed, settings, tasks: () => tasks };
 }
@@ -91,6 +96,17 @@ describe("download task lifecycle", () => {
     expect(f.engine.cancel).toHaveBeenCalledTimes(1);
   });
 
+  it.each(["pause", "cancel"] as const)("preserves a completed aria2 payload when %s arrives after the final write", async (action) => {
+    const f = fixture([task({ state: "downloading", engineTaskId: "0123456789abcdef" })]);
+    const transport = { request: vi.fn(async (request: Aria2RpcRequest) => request.method === "aria2.tellStatus" ? { status: "complete", totalLength: "10", completedLength: "10", files: [{ path: "C:\\Downloads\\one.zip" }] } : "OK") };
+    f.resolve.mockReturnValue(new Aria2Client(transport, "http://127.0.0.1:16800/jsonrpc"));
+    await expect(f.manager[action]("one")).rejects.toThrow("已完成下载");
+    expect(f.tasks()[0]).toMatchObject({ state: "downloading", engineTaskId: "0123456789abcdef" });
+    await f.manager.refreshAll();
+    expect(f.tasks()[0]).toMatchObject({ state: "completed", files: ["C:\\Downloads\\one.zip"] });
+    expect(transport.request.mock.calls.every(([request]) => request.method !== "aria2.forceRemove")).toBe(true);
+  });
+
   it("notifies completion once, then frees the next slot", async () => {
     const f = fixture([task({ state: "downloading", engineTaskId: "active" }), task({ id: "two", sourceUrl: "https://example.org/two.zip" })]);
     vi.mocked(f.engine.status).mockResolvedValue({ state: "completed", totalBytes: 10, completedBytes: 10, speedBytesPerSecond: 0, files: ["C:\\Downloads\\one.zip"] });
@@ -115,6 +131,46 @@ describe("download task lifecycle", () => {
     await f.manager.refreshAll();
     expect(f.tasks()[0].state).toBe("failed");
     expect(f.engine.add).not.toHaveBeenCalled();
+  });
+
+  it("re-adds a missing external torrent only after the user explicitly retries", async () => {
+    const f = fixture([task({ engineId: "qbittorrent", protocol: "torrent", sourceUrl: "https://example.org/a.torrent", state: "failed", engineTaskId: "removed", errorCode: "ENGINE_TASK_NOT_FOUND" })]);
+    vi.mocked(f.engine.resume).mockRejectedValue(new Error("qBittorrent 中找不到此任务，请重试下载。"));
+    await f.manager.retry("one");
+    expect(f.engine.resume).not.toHaveBeenCalled();
+    expect(f.engine.add).toHaveBeenCalledOnce();
+    expect(f.tasks()[0]).toMatchObject({ state: "downloading", engineTaskId: "remote-one", errorCode: undefined });
+  });
+
+  it.each(["downloading", "paused"] as const)("recovers an exactly missing Android record while keeping %s intent and completed files", async (state) => {
+    nativeInvoke.mockReset();
+    nativeInvoke.mockImplementation(async (name: string) => {
+      if (name === "mobile_http_status") throw "没有找到安卓下载记录；请从资源页重新添加";
+      if (name === "mobile_http_start") return { engineTaskId: "recovered-native" };
+      throw new Error("Unexpected native operation: " + name);
+    });
+    const completedFile = "/data/private/Incoming/keep.txt";
+    const f = fixture([
+      task({ engineId: "mobile_http", state, engineTaskId: "missing-native", directory: "/data/private/Incoming", completedBytes: 50 }),
+      task({ id: "completed", engineId: "mobile_http", state: "completed", directory: "/data/private/Incoming", files: [completedFile] }),
+    ]);
+    f.settings.httpDownloadEngine = "mobile_http";
+    f.resolve.mockReturnValue(new MobileHttpClient());
+    await f.manager.refreshAll();
+    expect(f.tasks()[0]).toMatchObject({ state: state === "paused" ? "paused" : "downloading", engineTaskId: state === "paused" ? undefined : "recovered-native", completedBytes: 50 });
+    expect(f.tasks()[1]).toMatchObject({ state: "completed", files: [completedFile] });
+    expect(nativeInvoke.mock.calls.filter(([name]) => name === "mobile_http_start")).toHaveLength(state === "paused" ? 0 : 1);
+  });
+
+  it.each(["安卓下载记录损坏", "读取下载记录失败：Permission denied", "连接下载来源失败", "没有找到安卓下载记录；请从资源页重新添加 (permission)"])("does not recreate an Android download for a different native failure: %s", async (message) => {
+    nativeInvoke.mockReset();
+    nativeInvoke.mockRejectedValueOnce(new Error(message));
+    const f = fixture([task({ engineId: "mobile_http", state: "downloading", engineTaskId: "retain-native", completedBytes: 50 })]);
+    f.settings.httpDownloadEngine = "mobile_http";
+    f.resolve.mockReturnValue(new MobileHttpClient());
+    await f.manager.refreshAll();
+    expect(f.tasks()[0]).toMatchObject({ state: "downloading", engineTaskId: "retain-native", completedBytes: 50, error: message });
+    expect(nativeInvoke).toHaveBeenCalledExactlyOnceWith("mobile_http_status", { taskId: "retain-native" });
   });
 
   it("stops a newly started remote job when its local record cannot be saved", async () => {

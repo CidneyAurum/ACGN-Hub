@@ -70,6 +70,67 @@ describe("RSS/Atom provider", () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    ["[NETWORK_DNS] domain lookup failed (mikanani.me)", "dns", "DNS"],
+    ["[NETWORK_TLS] certificate failed (mikanani.me)", "tls", "TLS"],
+    ["[NETWORK_TIMEOUT] timed out (mikanani.me)", "timeout", "超时"],
+    ["[NETWORK_CONNECT] could not connect (mikanani.me)", "connection", "建立网络连接"],
+    ["[NETWORK_READ] response read failed (mikanani.me)", "read", "响应读取失败"],
+    ["[NETWORK_REQUEST] request failed (mikanani.me)", "network", "网络请求失败"],
+    ["Unable to resolve host mikanani.me", "dns", "DNS"],
+    ["TLS handshake failure", "tls", "TLS"],
+  ])("preserves the controlled category of native transport failure %s without exposing credentials", async (nativeError, code, label) => {
+    const secret = "do-not-show-this-token";
+    const request = vi.fn<TextFetcher>().mockRejectedValue(`${nativeError}: https://mikanani.me/RSS/Classic?token=${secret}`);
+    const provider = new RssAtomProvider({ fetcher: request, minIntervalMs: 0, maxRetries: 0 });
+    const error = await provider.read("https://mikanani.me/RSS/Classic").catch((cause) => cause);
+    expect(error).toMatchObject({ code, message: expect.stringContaining(label) });
+    expect(error.message).not.toContain(secret);
+    expect(error.message).not.toContain("https://");
+    const health = await new RssSourceProvider("https://mikanani.me/RSS/Classic", provider).healthCheck();
+    expect(health).toMatchObject({ ok: false, message: expect.stringContaining(label) });
+    expect(health.message).not.toContain(secret);
+  });
+
+  it("does not invent a DNS or TLS cause when browser fetch only reports a generic failure", async () => {
+    const provider = new RssAtomProvider({ fetcher: vi.fn<TextFetcher>().mockRejectedValue(new TypeError("Failed to fetch")), minIntervalMs: 0, maxRetries: 0 });
+    await expect(provider.read("https://example.com/feed.xml")).rejects.toMatchObject({ code: "network", message: expect.stringContaining("未提供") });
+  });
+
+  it.each([401, 403, 404, 429, 503])("includes HTTP %s in a source health failure instead of losing the status", async (status) => {
+    const provider = new RssAtomProvider({ fetcher: fetcher(response(status, "secret response body")), minIntervalMs: 0, maxRetries: 0 });
+    const health = await new RssSourceProvider("https://example.com/feed.xml", provider).healthCheck();
+    expect(health).toMatchObject({ ok: false, message: expect.stringContaining(`HTTP ${status}`) });
+    expect(health.message).not.toContain("secret response body");
+    if (status === 403) expect(health.message).not.toMatch(/登录|认证/);
+  });
+
+  it("classifies a native non-Error health failure without showing the raw URL or token", async () => {
+    const source = new RssSourceProvider("https://mikanani.me/RSS/Classic", { id: "fixture", read: async () => { throw "[NETWORK_DNS] https://mikanani.me/?token=secret"; } });
+    expect(await source.healthCheck()).toMatchObject({ ok: false, message: expect.stringContaining("DNS") });
+  });
+
+  it.each(["headers", "body"])("bounds a stalled %s transport even when it ignores AbortSignal", async (stage) => {
+    const controller = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    try {
+      const request: TextFetcher = stage === "headers" ? vi.fn<TextFetcher>(() => new Promise(() => undefined))
+        : vi.fn<TextFetcher>(async () => ({ status: 200, text: () => new Promise<string>(() => undefined) }));
+      const provider = new RssAtomProvider({ fetcher: request, minIntervalMs: 0, maxRetries: 0, timeoutMs: 500 });
+      const rejection = expect(provider.read("https://example.com/feed.xml")).rejects.toMatchObject({ code: "timeout" });
+      await Promise.resolve();
+      controller.abort(new DOMException("timed out", "TimeoutError"));
+      await rejection;
+    } finally { timeout.mockRestore(); }
+  });
+
+  it("keeps its configured retry count for transient connection failures", async () => {
+    const request = vi.fn<TextFetcher>().mockRejectedValueOnce("[NETWORK_CONNECT] failed").mockResolvedValueOnce(response(200, rssFixture));
+    const provider = new RssAtomProvider({ fetcher: request, minIntervalMs: 0, maxRetries: 1, sleep: async () => {} });
+    await expect(provider.read("https://example.com/feed.xml")).resolves.toMatchObject({ format: "rss2" });
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects unsupported XML", () => {
     expect(() => parseFeedXml("<html><body>not a feed</body></html>")).toThrowError(FeedProviderError);
     expect(() => parseFeedXml("<html><body>not a feed</body></html>")).toThrow(/不支持的 Feed 格式/);

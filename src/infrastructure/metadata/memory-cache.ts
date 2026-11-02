@@ -1,3 +1,5 @@
+import { cloneMetadata } from "./clone-metadata";
+
 interface CacheEntry<T> {
   value: T;
   expiresAt: number;
@@ -19,7 +21,7 @@ export class MemoryCache {
     }
     this.entries.delete(key);
     this.entries.set(key, entry);
-    return structuredClone(entry.value) as T;
+    return cloneMetadata(entry.value) as T;
   }
 
   set<T>(key: string, value: T, ttlMs: number, now = Date.now()): void {
@@ -28,7 +30,7 @@ export class MemoryCache {
       if (entry.expiresAt <= now) this.entries.delete(cachedKey);
     }
     this.entries.delete(key);
-    this.entries.set(key, { value: structuredClone(value), expiresAt: now + ttlMs });
+    this.entries.set(key, { value: cloneMetadata(value), expiresAt: now + ttlMs });
     while (this.entries.size > this.maxEntries) this.entries.delete(this.entries.keys().next().value!);
   }
 
@@ -46,7 +48,7 @@ export class MemoryCache {
       const completed = () => { if (this.pending.get(key) === pending) this.pending.delete(key); };
       void pending.then(completed, completed);
     }
-    return structuredClone(await pending);
+    return cloneMetadata(await pending);
   }
 
   clear(): void {

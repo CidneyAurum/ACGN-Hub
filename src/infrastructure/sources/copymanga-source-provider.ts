@@ -1,3 +1,4 @@
+import { timeoutSignal } from "@/shared/abort-signals";
 import { z } from "zod";
 import type { SourceHealth, SourceProvider, SourceSearchQuery, SourceSearchResult } from "@/application/source-ports";
 import type { DownloadTarget } from "@/domain/download";
@@ -331,7 +332,7 @@ export class CopyMangaSourceProvider implements SourceProvider {
         webp: "1",
         ...(this.authorization ? { authorization: this.authorization } : {}),
       },
-      signal: AbortSignal.timeout(this.timeoutMs),
+      signal: timeoutSignal(this.timeoutMs),
     });
     if (response.status < 200 || response.status >= 300) throw new Error(`拷贝漫画 API HTTP ${response.status}`);
     return response.json();

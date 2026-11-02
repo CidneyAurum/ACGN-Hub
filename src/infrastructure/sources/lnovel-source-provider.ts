@@ -1,3 +1,4 @@
+import { timeoutSignal } from "@/shared/abort-signals";
 import { invoke } from "@tauri-apps/api/core";
 import { z } from "zod";
 import type { SourceHealth, SourceProvider, SourceSearchQuery, SourceSearchResult } from "@/application/source-ports";
@@ -333,7 +334,7 @@ export class LNovelSourceProvider implements SourceProvider {
     const response = await this.fetcher(url, {
       method: "GET",
       headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: timeoutSignal(timeoutMs),
       timeoutMs,
     });
     let body: unknown;

@@ -5,9 +5,19 @@ import { BangumiProvider } from "@/infrastructure/metadata/bangumi-provider";
 import { abortableRequest } from "@/infrastructure/metadata/abortable-request";
 import { bangumiSearchFixture } from "@/tests/fixtures/bangumi";
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("metadata request runtime", () => {
+  it("accepts successful metadata responses without structuredClone in legacy WebViews", async () => {
+    vi.stubGlobal("structuredClone", undefined);
+    const fetcher = vi.fn().mockResolvedValue({ status: 200, json: async () => bangumiSearchFixture });
+    const provider = new BangumiProvider({ fetcher, minIntervalMs: 0 });
+    const works = await provider.search({ keyword: "test" });
+    expect(works.length).toBeGreaterThan(0);
+    works[0].title = "caller change";
+    expect((await provider.search({ keyword: "test" }))[0].title).not.toBe("caller change");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
   it("spaces concurrently requested permits instead of releasing them together", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);

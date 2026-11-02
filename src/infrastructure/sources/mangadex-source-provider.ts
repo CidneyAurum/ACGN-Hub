@@ -1,3 +1,4 @@
+import { timeoutSignal } from "@/shared/abort-signals";
 import { z } from "zod";
 import type { SourceHealth, SourceProvider, SourceSearchQuery, SourceSearchResult } from "@/application/source-ports";
 import type { DownloadTarget } from "@/domain/download";
@@ -239,7 +240,7 @@ export class MangaDexSourceProvider implements SourceProvider {
     const response = await this.fetcher(url, {
       method: "GET",
       headers: { Accept: "application/json" },
-      signal: AbortSignal.timeout(this.timeoutMs),
+      signal: timeoutSignal(this.timeoutMs),
     });
     if (response.status < 200 || response.status >= 300) throw new Error("MangaDex API HTTP " + response.status);
     return response.json();

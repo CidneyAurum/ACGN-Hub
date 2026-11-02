@@ -19,6 +19,16 @@ const query = { keyword: "CLANNAD", aliases: [], mediaType: "visual_novel" as co
 const itemId = (path: string) => `file:${encodeURIComponent(path)}`;
 
 describe("Shinnku public file catalog", () => {
+  it("reads archive entries when legacy WebView has no Object.hasOwn", async () => {
+    const original = Object.hasOwn;
+    Object.hasOwn = undefined as never;
+    try {
+      const provider = new ShinnkuSourceProvider(undefined, { fetcher: vi.fn<TextFetcher>().mockResolvedValue(text(searchHtml([file()]))) });
+      const matches = await provider.search(query);
+      expect(matches).toHaveLength(1);
+      expect(matches[0].title).toBe("CLANNAD(官中)");
+    } finally { Object.hasOwn = original; }
+  });
   it("reads split JSON-only RSC records, removes semantic-search noise and retains distinct editions", async () => {
     const infos = [file(), file("0/win/CLANNAD/CLANNAD(汉化组).7z"), file("0/win/Unrelated Summer Story.7z")];
     const fetcher = vi.fn<TextFetcher>().mockResolvedValue(text(rsc({ answer: infos.map((info) => ({ id: info.file_path, info })) }, true)));

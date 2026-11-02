@@ -6,6 +6,7 @@ import { classifyBangumiBook } from "./bangumi-book-kind";
 import { abortableRequest } from "./abortable-request";
 import { createJsonFetcher, type JsonFetcher } from "./json-transport";
 import { MemoryCache } from "./memory-cache";
+import { cloneMetadata } from "./clone-metadata";
 import { MinIntervalLimiter, type Sleep } from "./rate-limiter";
 import { parseJsonResponse, isTimeoutError } from "./response-errors";
 
@@ -106,7 +107,7 @@ export class BangumiAuthorProvider {
     checkCancelled(options.signal);
     for (const author of authors) this.cache.set(`bangumi:person:${author.id}`, author, CACHE_TTL);
     this.cache.set(key, authors, CACHE_TTL);
-    return structuredClone(authors);
+    return cloneMetadata(authors);
   }
 
   async listWorks(personId: string, type: MediaType, options: AuthorWorksOptions = {}): Promise<AuthorWorksResult> {

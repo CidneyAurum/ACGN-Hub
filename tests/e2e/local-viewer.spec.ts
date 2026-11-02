@@ -567,3 +567,137 @@ test("plain-text novel exposes chapter navigation, reading controls and restores
   await expect.poll(() => page.getByRole("article", { name: "小说正文", exact: true }).evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   await expect(page.getByRole("combobox", { name: "小说章节目录", exact: true }).locator("option:checked")).toHaveText("第三章 远航");
 });
+
+for (const mode of ["native", "webview-fallback"] as const) {
+  test(`a short final novel chapter remains selected at the bottom and after reopening (${mode})`, async ({ page }) => {
+    if (mode === "webview-fallback") await page.setViewportSize({ width: 390, height: 844 });
+    const saved = localTask("short-final-chapter", "novel", "星海物语 - 第一卷.txt");
+    const text = ["第一章 启程", "旅程中的正文。".repeat(800), "第二章 尾声", "终点的短篇正文。"].join("\n\n");
+    const simulation = await simulateViewer(page);
+    simulation.prepare = async () => ({ sessionId: novelSessionId, kind: "text", title: saved.title, sizeBytes: text.length, modifiedAt, text });
+    await seedTasks(page, [saved]);
+    await page.goto("/#/viewer/local/short-final-chapter");
+    const contents = page.getByRole("combobox", { name: "小说章节目录", exact: true });
+    const body = page.getByRole("article", { name: "小说正文", exact: true });
+    await contents.selectOption({ label: "第二章 尾声" });
+    await expect.poll(() => body.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThan(2);
+    await expect(body.getByRole("heading", { name: "第二章 尾声", exact: true })).toBeInViewport();
+    // A short final chapter cannot scroll to the top. Waiting for a settled
+    // scroll event must not move the contents selector back to chapter one.
+    await expect.poll(async () => {
+      await page.waitForTimeout(350);
+      return contents.locator("option:checked").textContent();
+    }).toBe("第二章 尾声");
+    if (mode === "webview-fallback") await page.evaluate(() => {
+      Object.defineProperty(HTMLElement.prototype, "requestFullscreen", { configurable: true, value: undefined });
+    });
+    await page.getByRole("button", { name: "全屏观看", exact: true }).click();
+    const fullscreen = page.locator(mode === "native" ? ".viewer-surface:fullscreen" : ".viewer-surface.is-immersive");
+    await expect(fullscreen).toBeVisible();
+    await expect(contents.locator("option:checked")).toHaveText("第二章 尾声");
+    await expect(body.getByRole("heading", { name: "第二章 尾声", exact: true })).toBeInViewport();
+    if (mode === "native") await page.evaluate(() => document.exitFullscreen());
+    else await page.keyboard.press("Escape");
+    await expect(fullscreen).toHaveCount(0);
+    await expect(body.getByRole("heading", { name: "第二章 尾声", exact: true })).toBeInViewport();
+    await page.getByRole("button", { name: "全屏观看", exact: true }).click();
+    await page.getByRole("button", { name: "退出全屏", exact: true }).click();
+    await expect(contents.locator("option:checked")).toHaveText("第二章 尾声");
+    if (mode === "native") await page.setViewportSize({ width: 1200, height: 800 });
+    else {
+      await page.getByRole("button", { name: "全屏观看", exact: true }).click();
+      await page.setViewportSize({ width: 844, height: 390 });
+      await expect(body.getByRole("heading", { name: "第二章 尾声", exact: true })).toBeInViewport();
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByRole("button", { name: "退出全屏", exact: true }).click();
+    }
+    await page.getByRole("link", { name: "← 返回下载", exact: true }).click();
+    await waitDownloadReady(page);
+    await page.evaluate(() => { location.hash = "/viewer/local/short-final-chapter"; });
+    await expect(body.getByRole("heading", { name: "第二章 尾声", exact: true })).toBeInViewport();
+    await expect(contents.locator("option:checked")).toHaveText("第二章 尾声");
+  });
+}
+
+test("a short landscape final comic page becomes current at the bottom and is restored", async ({ page }) => {
+  const saved = localTask("short-final-comic", "manga", "固定漫画 - 第01话.cbz");
+  const simulation = await simulateViewer(page);
+  simulation.imageSizes = [{ width: 600, height: 900 }, { width: 600, height: 900 }, { width: 1200, height: 100 }];
+  await seedTasks(page, [saved]);
+  await page.goto("/#/viewer/local/short-final-comic");
+  await expectComicPage(page, 1, 600);
+  await page.getByRole("spinbutton", { name: "跳转页码" }).fill("3");
+  await page.getByRole("button", { name: "跳转", exact: true }).click();
+  const stage = page.locator('[aria-label="漫画阅读区域"]');
+  const last = stage.locator('[data-page-index="2"]');
+  await expect(last.locator("img")).toHaveJSProperty("naturalWidth", 1200);
+  await expect(last).toBeInViewport();
+  await expect.poll(() => stage.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThan(2);
+  await expect(page.getByRole("spinbutton", { name: "跳转页码" })).toHaveValue("3");
+  await page.getByRole("link", { name: "← 返回下载", exact: true }).click();
+  await waitDownloadReady(page);
+  await page.evaluate(() => { location.hash = "/viewer/local/short-final-comic"; });
+  await expect(page.getByRole("spinbutton", { name: "跳转页码" })).toHaveValue("3");
+  await expect(stage.locator('[data-page-index="2"] img')).toHaveJSProperty("naturalWidth", 1200);
+});
+
+test("a short final comic page auto-continues only after reading and supports cancellation", async ({ page }) => {
+  const first = localTask("short-page-series-1", "manga", "星海物语 - 第1话.cbz", {
+    reading: { mediaId: "short-page-series", seriesTitle: "星海物语", unitTitle: "第1话", unitNumber: 1 },
+  });
+  const second = localTask("short-page-series-2", "manga", "星海物语 - 第2话.cbz", {
+    reading: { mediaId: "short-page-series", seriesTitle: "星海物语", unitTitle: "第2话", unitNumber: 2 },
+  });
+  const simulation = await simulateViewer(page);
+  simulation.imageSizes = [{ width: 600, height: 900 }, { width: 600, height: 900 }, { width: 1200, height: 100 }];
+  simulation.prepare = async (request) => request.path === first.outputPath
+    ? { ...comicSession(chapterOneSessionId), title: first.title }
+    : { ...comicSession(chapterTwoSessionId), title: second.title };
+  await seedTasks(page, [first, second]);
+  await page.goto("/#/viewer/local/short-page-series-1");
+  const stage = page.locator('[aria-label="漫画阅读区域"]');
+  await stage.hover();
+  await page.mouse.wheel(0, 20_000);
+  await expect(page.getByRole("spinbutton", { name: "跳转页码" })).toHaveValue("3");
+  await expect(page.getByRole("status")).toContainText(/秒后继续/);
+  await page.getByRole("button", { name: "取消本次接续", exact: true }).click();
+  await page.waitForTimeout(3500);
+  await expect(page).toHaveURL(/#\/viewer\/local\/short-page-series-1$/);
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await page.getByRole("button", { name: "下一话 →", exact: true }).click();
+  await expect(page).toHaveURL(/#\/viewer\/local\/short-page-series-2$/);
+  await expect(page.getByRole("heading", { name: second.title, exact: true })).toBeVisible();
+});
+
+test("novel end continuation waits for reading, can be cancelled and never repeats on reopen", async ({ page }) => {
+  const first = localTask("short-novel-series-1", "novel", "星海物语 - 第1卷.txt", {
+    reading: { mediaId: "short-novel-series", seriesTitle: "星海物语", unitTitle: "第1卷", unitNumber: 1 },
+  });
+  const second = localTask("short-novel-series-2", "novel", "星海物语 - 第2卷.txt", {
+    reading: { mediaId: "short-novel-series", seriesTitle: "星海物语", unitTitle: "第2卷", unitNumber: 2 },
+  });
+  const simulation = await simulateViewer(page);
+  simulation.prepare = async (request) => ({ sessionId: request.path === first.outputPath ? chapterOneSessionId : chapterTwoSessionId,
+    kind: "text", title: request.path === first.outputPath ? first.title : second.title, sizeBytes: 1000, modifiedAt,
+    text: ["第一章 启程", "旅程中的正文。".repeat(300), "第二章 尾声", "终点的短篇正文。"].join("\n\n") });
+  await seedTasks(page, [first, second]);
+  await page.goto("/#/viewer/local/short-novel-series-1");
+  await page.getByRole("combobox", { name: "小说章节目录", exact: true }).selectOption({ label: "第二章 尾声" });
+  await expect(page.getByRole("status")).toContainText(/秒后继续/);
+  await page.getByRole("button", { name: "取消本次接续", exact: true }).click();
+  await page.waitForTimeout(3500);
+  await expect(page).toHaveURL(/#\/viewer\/local\/short-novel-series-1$/);
+  await page.getByRole("link", { name: "← 返回下载", exact: true }).click();
+  await waitDownloadReady(page);
+  await page.evaluate(() => { location.hash = "/viewer/local/short-novel-series-1"; });
+  await expect(page.getByRole("combobox", { name: "小说章节目录", exact: true }).locator("option:checked")).toHaveText("第二章 尾声");
+  await page.waitForTimeout(3500);
+  await expect(page).toHaveURL(/#\/viewer\/local\/short-novel-series-1$/);
+  await expect(page.getByRole("status")).toHaveCount(0);
+  const body = page.getByRole("article", { name: "小说正文", exact: true });
+  await body.hover();
+  await page.mouse.wheel(0, -300);
+  await page.mouse.wheel(0, 1000);
+  await expect(page.getByRole("status")).toContainText(/秒后继续/);
+  await expect(page).toHaveURL(/#\/viewer\/local\/short-novel-series-2$/, { timeout: 7000 });
+});

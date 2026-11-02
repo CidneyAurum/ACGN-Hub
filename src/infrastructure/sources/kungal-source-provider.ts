@@ -1,3 +1,4 @@
+import { timeoutSignal, anySignal, throwIfAborted, disposeAbortSignal } from "@/shared/abort-signals";
 import { z } from "zod";
 import type { SourceHealth, SourceProvider, SourceSearchQuery, SourceSearchResult } from "@/application/source-ports";
 import type { DownloadTarget } from "@/domain/download";
@@ -63,7 +64,7 @@ export class KUNGalgameSourceProvider implements SourceProvider {
     const queries = [...new Set([query.keyword, ...query.aliases].map((value) => value.trim()).filter(Boolean))].slice(0, 4);
     if (!queries.length) return [];
     const responses = await Promise.allSettled(queries.map((value) => this.searchWorks(value, query.page ?? 1)));
-    this.signal?.throwIfAborted();
+    throwIfAborted(this.signal);
     const successful = responses.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
     if (!successful.length) {
       const failure = responses.find((result): result is PromiseRejectedResult => result.status === "rejected")?.reason;
@@ -158,9 +159,9 @@ export class KUNGalgameSourceProvider implements SourceProvider {
     if (!parsed.success) throw new Error("鲲 Galgame 公开作品目录响应格式发生变化，请打开原站查看"); return parsed.data.items;
   }
   private async fetchJson(url: string): Promise<unknown> {
-    this.signal?.throwIfAborted();
-    const timed = AbortSignal.timeout(this.timeoutMs);
-    const signal = this.signal ? AbortSignal.any([this.signal, timed]) : timed;
+    throwIfAborted(this.signal);
+    const timed = timeoutSignal(this.timeoutMs);
+    const signal = this.signal ? anySignal([this.signal, timed]) : timed;
     try {
       const response = await abortableRequest(() => this.fetcher(url, {
         method: "GET", headers: { Accept: "application/json" }, credentials: "omit", signal, timeoutMs: this.timeoutMs,
@@ -169,12 +170,13 @@ export class KUNGalgameSourceProvider implements SourceProvider {
       if (response.status < 200 || response.status >= 300) throw new Error(`鲲 Galgame 公开目录 HTTP ${response.status}，请打开原站确认访问条件`);
       return await abortableRequest(() => response.json(), signal);
     } catch (cause) {
-      this.signal?.throwIfAborted();
+      throwIfAborted(this.signal);
       if (timed.aborted || isTimeoutError(cause)) throw new Error("鲲 Galgame 目录请求超时，请稍后重试");
       if (cause instanceof Error && cause.message.startsWith("鲲 Galgame ")) throw cause;
       if (cause instanceof SyntaxError) throw new Error("鲲 Galgame 公开目录返回了无效 JSON，请稍后重试");
       throw new Error("无法连接鲲 Galgame 公开目录，请检查网络后重试");
     }
+    finally { disposeAbortSignal(signal); disposeAbortSignal(timed); }
   }
 }
 function preferredTitle(game: Work): string { return game.localized["zh-Hans"]?.value.trim() || game.localized["zh-Hant"]?.value.trim() || game.display_name.trim() || game.localized.en?.value.trim() || `鲲 Galgame #${game.id}`; }

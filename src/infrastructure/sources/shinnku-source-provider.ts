@@ -1,3 +1,4 @@
+import { timeoutSignal, anySignal, throwIfAborted, disposeAbortSignal } from "@/shared/abort-signals";
 import { z } from "zod";
 import type { TextFetcher } from "@/application/feed-ports";
 import type { SourceHealth, SourceProvider, SourceSearchQuery, SourceSearchResult } from "@/application/source-ports";
@@ -64,7 +65,7 @@ export class ShinnkuSourceProvider implements SourceProvider {
     const terms = sourceSearchTerms(query.keyword, query.aliases, 3);
     if (!terms.length) return [];
     const responses = await Promise.allSettled(terms.map((term) => this.readCatalog(`${this.baseUrl}/search?q=${encodeURIComponent(term)}`)));
-    this.signal?.throwIfAborted();
+    throwIfAborted(this.signal);
     const successful = responses.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
     if (!successful.length) {
       const failed = responses.find((result): result is PromiseRejectedResult => result.status === "rejected");
@@ -195,9 +196,9 @@ export class ShinnkuSourceProvider implements SourceProvider {
   }
 
   private async readCatalog(url: string): Promise<CatalogFile[]> {
-    this.signal?.throwIfAborted();
-    const timed = AbortSignal.timeout(this.timeoutMs);
-    const signal = this.signal ? AbortSignal.any([this.signal, timed]) : timed;
+    throwIfAborted(this.signal);
+    const timed = timeoutSignal(this.timeoutMs);
+    const signal = this.signal ? anySignal([this.signal, timed]) : timed;
     try {
       const init: RequestInit & { timeoutMs: number } = { method: "GET", headers: { Accept: "text/html" }, signal, timeoutMs: this.timeoutMs };
       const response = await abortableRequest(() => this.fetcher(url, init), signal);
@@ -205,11 +206,12 @@ export class ShinnkuSourceProvider implements SourceProvider {
       const html = await abortableRequest(() => response.text(), signal);
       return parseCatalog(html);
     } catch (cause) {
-      this.signal?.throwIfAborted();
+      throwIfAborted(this.signal);
       if (timed.aborted) throw new Error("真红小站目录请求超时，请稍后重试");
       if (cause instanceof Error && cause.message.startsWith("真红小站")) throw cause;
       throw new Error("真红小站目录暂时无法读取，请稍后重试或打开原站");
     }
+    finally { disposeAbortSignal(signal); disposeAbortSignal(timed); }
   }
 }
 
@@ -244,7 +246,7 @@ function parseCatalog(html: string): CatalogFile[] {
     }
     const object = value as Record<string, unknown>;
     if (Array.isArray(object.answer) || Array.isArray(object.inode)) catalogSeen = true;
-    if (Object.hasOwn(object, "file_path")) {
+    if (Object.prototype.hasOwnProperty.call(object, "file_path")) {
       catalogSeen = true;
       const parsed = fileSchema.safeParse(object);
       if (parsed.success && safePath(parsed.data.file_path)) files.set(parsed.data.file_path, parsed.data);

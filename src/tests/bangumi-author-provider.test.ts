@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BangumiAuthorProvider } from "@/infrastructure/metadata/bangumi-author-provider";
 import type { JsonFetcher } from "@/infrastructure/metadata/json-transport";
 
@@ -9,6 +9,7 @@ const person = {
 const relation = (id: number, extra: Record<string, unknown> = {}) => ({ id, type: 1, name: `Original ${id}`, name_cn: `作品 ${id}`, staff: "作者", image: "https://lain.bgm.tv/cover.jpg", ...extra });
 const subject = (id: number, extra: Record<string, unknown> = {}) => ({ id, type: 1, name: `Original ${id}`, name_cn: `作品 ${id}`, platform: "小说", tags: [{ name: "轻小说" }], rating: { score: 8.2, total: 100 }, date: "2025-06-01", ...extra });
 const response = (body: unknown, status = 200) => ({ status, json: async () => body });
+afterEach(() => vi.unstubAllGlobals());
 function setup(related: unknown[], details: Record<string, unknown> = {}) {
   const fetcher = vi.fn<JsonFetcher>(async (url) => {
     if (url.includes("/search/persons")) return response({ data: [person], total: 1, limit: 20, offset: 0 });
@@ -21,6 +22,14 @@ function setup(related: unknown[], details: Record<string, unknown> = {}) {
 }
 
 describe("Bangumi author search", () => {
+  it("returns author works with successful responses when structuredClone is absent", async () => {
+    vi.stubGlobal("structuredClone", undefined);
+    const { provider } = setup([relation(1)], { 1: subject(1) });
+    const people = await provider.searchPeople("入间人间");
+    people[0].aliases.push("caller change");
+    expect((await provider.searchPeople("入间人间"))[0].aliases).not.toContain("caller change");
+    expect((await provider.listWorks("6207", "novel")).items[0].metadata.authorName).toBe("入間人間");
+  });
   it("uses the official experimental people POST rather than a title search, with anonymous headers", async () => {
     const { fetcher, provider } = setup([]);
     await expect(provider.searchPeople(" 入间人间 ")).resolves.toEqual([{

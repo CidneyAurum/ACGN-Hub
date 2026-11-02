@@ -8,7 +8,7 @@ export function readDownloadNaming(raw: string | null | undefined): DownloadNami
   const record = value as Record<string, unknown>;
   if (!Object.keys(record).length) return undefined;
   const result = Object.fromEntries(["status", "originalFileName", "originalPath", "currentFileName", "renamedAt", "message"]
-    .filter((key) => Object.hasOwn(record, key)).map((key) => [key, record[key]]));
+    .filter((key) => Object.prototype.hasOwnProperty.call(record, key)).map((key) => [key, record[key]]));
   // Task validation checks the field types. Unknown JSON keys never override paths or task identity.
   return result as unknown as DownloadNaming;
 }

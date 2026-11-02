@@ -3,7 +3,8 @@ import { computed, onMounted, ref, watch } from "vue";
 import type { SourceConfig } from "@/domain/source";
 import type { MediaType } from "@/domain/media";
 import { useSourceConfigStore } from "@/stores/source-config";
-import { newId } from "@/shared/runtime";
+import { isTauriRuntime, newId } from "@/shared/runtime";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { parseGithubRepositoryUrl } from "@/infrastructure/sources/github-release-provider";
 import { createSourceProvider } from "@/infrastructure/sources/create-source-provider";
 import type { SourceHealth } from "@/application/source-ports";
@@ -405,6 +406,15 @@ function isHttpUrl(value: string): boolean {
     return false;
   }
 }
+
+async function checkInBrowser(config: SourceConfig): Promise<void> {
+  if (!isHttpUrl(config.url)) return;
+  error.value = "";
+  try {
+    if (isTauriRuntime()) await openUrl(config.url);
+    else window.open(config.url, "_blank", "noopener,noreferrer");
+  } catch (cause) { error.value = cause instanceof Error ? cause.message : "无法打开系统浏览器"; }
+}
 </script>
 
 <template>
@@ -456,6 +466,7 @@ function isHttpUrl(value: string): boolean {
           <SourceGuide :config="config" />
           <p v-if="sourcePlatformUnavailableReason(config)" class="hint" role="status">{{ sourcePlatformUnavailableReason(config) }}</p>
           <p v-if="health[config.id]?.message" class="hint" :class="{ 'error-text': !health[config.id]?.ok }">{{ health[config.id]?.message }}</p>
+          <p v-if="health[config.id]?.ok === false && isHttpUrl(config.url)" class="hint">可以用同一台设备的浏览器检查来源地址；浏览器结果可帮助区分站点访问与应用请求问题。</p>
           <p v-if="health[config.id]?.checkedAt" class="source-check-time">上次连接检测：{{ health[config.id]?.checkedAt }}</p>
           <p v-if="latestSourceIssue(config)" class="hint error-text" role="status">最近失败：{{ latestSourceIssue(config)?.message }} · {{ latestSourceIssue(config)?.checkedAt }}</p>
           <form v-if="editingId === config.id" class="source-edit" @submit.prevent="saveSourceEdit(config)">
@@ -472,6 +483,7 @@ function isHttpUrl(value: string): boolean {
           <span class="state-pill" :class="{ enabled: config.enabled }">{{ config.enabled ? "已启用" : "已停用" }}</span>
           <span class="state-pill" :class="{ enabled: health[config.id]?.ok && !latestSourceIssue(config) }">状态：{{ healthLabel(config) }}</span>
           <button class="small-button" :disabled="!!healthBusyId || !!sourcePlatformUnavailableReason(config)" type="button" @click="checkHealth(config)">{{ healthBusyId === config.id ? "检测中…" : "检查连接" }}</button>
+          <button v-if="health[config.id]?.ok === false && isHttpUrl(config.url)" class="small-button" type="button" @click="checkInBrowser(config)">用浏览器检查</button>
           <button class="small-button" type="button" @click="editSource(config)">编辑</button>
           <button class="small-button" :disabled="!config.enabled && !!sourcePlatformUnavailableReason(config)" type="button" @click="toggle(config)">{{ config.enabled ? "停用" : "启用" }}</button>
           <button class="small-button danger" type="button" @click="remove(config)">移除</button>

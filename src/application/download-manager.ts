@@ -211,7 +211,7 @@ export class DownloadManager {
     await this.lock(id, async () => {
       const task = this.current(id);
       this.requireState(task, ["failed", "cancelled"], "重试");
-      const keepRemote = ["qbittorrent", "mobile_http"].includes(task.engineId) && task.state === "failed";
+      const keepRemote = ["qbittorrent", "mobile_http"].includes(task.engineId) && task.state === "failed" && task.errorCode !== "ENGINE_TASK_NOT_FOUND";
       await this.save({ ...task, engineTaskId: keepRemote ? task.engineTaskId : undefined, state: "queued", stage: undefined, error: undefined, errorCode: undefined, speedBytesPerSecond: 0, updatedAt: nowIso() });
       this.clearCancelledRecovery(id);
     });

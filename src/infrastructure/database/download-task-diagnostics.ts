@@ -14,5 +14,5 @@ export function readDownloadDiagnostics(raw: string | null | undefined): Downloa
   catch (cause) { throw new Error("下载任务的连接诊断已损坏，原始记录已保留", { cause }); }
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("下载任务的连接诊断格式无效，原始记录已保留");
   const record = value as Record<string, unknown>;
-  return Object.fromEntries(fields.filter((key) => Object.hasOwn(record, key)).map((key) => [key, record[key]])) as DownloadDiagnostics;
+  return Object.fromEntries(fields.filter((key) => Object.prototype.hasOwnProperty.call(record, key)).map((key) => [key, record[key]])) as DownloadDiagnostics;
 }

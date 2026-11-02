@@ -1,3 +1,4 @@
+import { timeoutSignal } from "@/shared/abort-signals";
 import { invoke } from "@tauri-apps/api/core";
 import { z } from "zod";
 import type { SourceProvider, SourceSearchQuery, SourceSearchResult, SourceHealth } from "@/application/source-ports";
@@ -57,7 +58,7 @@ export class PublicVideoSourceProvider implements SourceProvider {
     const response = await this.fetcher(endpoint.toString(), { method: "GET", headers: {
       Accept: "application/json", Referer: "https://search.bilibili.com/",
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36",
-    }, signal: AbortSignal.timeout(this.timeoutMs), timeoutMs: this.timeoutMs });
+    }, signal: timeoutSignal(this.timeoutMs), timeoutMs: this.timeoutMs });
     if (response.status !== 200) throw new Error(`B站公开搜索 HTTP ${response.status}；可改用公开 BV 号或投稿链接`);
     const parsed = searchSchema.safeParse(await response.json());
     if (!parsed.success) throw new Error("B站公开搜索响应格式发生变化，请改用公开投稿链接");

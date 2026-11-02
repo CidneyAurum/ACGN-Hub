@@ -1,3 +1,4 @@
+import { timeoutSignal } from "@/shared/abort-signals";
 import { XMLParser } from "fast-xml-parser";
 import type { TextFetcher } from "@/application/feed-ports";
 import type { SourceHealth, SourceProvider, SourceSearchQuery, SourceSearchResult } from "@/application/source-ports";
@@ -129,7 +130,8 @@ export class MangabzSourceProvider implements SourceProvider {
     }
     if (!resources.size) throw new Error("MangaBZ 当前作品没有可下载图片章节，或章节目录格式已变化");
     const values = [...resources.values()].sort((a, b) => (a.chapter ?? Number.MAX_SAFE_INTEGER) - (b.chapter ?? Number.MAX_SAFE_INTEGER));
-    const latest = values.filter((resource) => /^第\s*\d+(?:\.\d+)?\s*[话話集章]/u.test(String(resource.metadata.chapterName))).at(-1);
+    const chapters = values.filter((resource) => /^第\s*\d+(?:\.\d+)?\s*[话話集章]/u.test(String(resource.metadata.chapterName)));
+    const latest = chapters[chapters.length - 1];
     for (const resource of values) {
       resource.metadata.chapterCount = values.length;
       if (latest) resource.metadata.latestChapter = latest.metadata.chapterName;
@@ -190,7 +192,7 @@ export class MangabzSourceProvider implements SourceProvider {
 
   private async request(url: string, referer = ORIGIN + "/"): Promise<string> {
     await this.limiter.wait();
-    const response = await this.fetcher(url, { method: "GET", headers: { Accept: "text/html,application/javascript;q=0.9,*/*;q=0.5", Referer: referer, "User-Agent": AGENT }, signal: AbortSignal.timeout(this.timeoutMs) });
+    const response = await this.fetcher(url, { method: "GET", headers: { Accept: "text/html,application/javascript;q=0.9,*/*;q=0.5", Referer: referer, "User-Agent": AGENT }, signal: timeoutSignal(this.timeoutMs) });
     if (response.status < 200 || response.status >= 300) throw new Error(`MangaBZ HTTP ${response.status}，请稍后重试或在原站确认访问状态`);
     const body = await response.text();
     if (body.length > 4_000_000) throw new Error("MangaBZ 响应过大，已停止解析");

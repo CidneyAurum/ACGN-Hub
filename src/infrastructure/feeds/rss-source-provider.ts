@@ -1,3 +1,4 @@
+import { timeoutSignal } from "@/shared/abort-signals";
 import type { SourceProvider, SourceSearchQuery, SourceSearchResult } from "@/application/source-ports";
 import { parseDownloadTarget } from "@/shared/validation";
 import type { DownloadTarget } from "@/domain/download";
@@ -5,7 +6,7 @@ import type { MediaType } from "@/domain/media";
 import type { ResourceItem } from "@/domain/resource";
 import type { FeedDocument, FeedEnclosure, FeedItem } from "@/domain/feed";
 import type { FeedProvider } from "@/application/feed-ports";
-import { RssAtomProvider } from "./rss-atom-provider";
+import { feedRequestError, RssAtomProvider } from "./rss-atom-provider";
 import { createTextFetcher } from "./text-transport";
 import type { TextFetcher } from "@/application/feed-ports";
 import { normalizeSourceTitle, rankSourceCandidates, resourceTitleLabels, seasonNumber, sourceSearchTerms } from "@/infrastructure/sources/source-matching";
@@ -114,7 +115,7 @@ export class RssSourceProvider implements SourceProvider {
       if (!downloadable) return { ok: false, checkedAt, message: `Feed 可读取，但没有可下载条目（共 ${feed.items.length} 条）` };
       return { ok: true, checkedAt, message: `Feed 正常，发现 ${downloadable} 个可下载条目` };
     } catch (cause) {
-      return { ok: false, checkedAt, message: cause instanceof Error ? cause.message : "来源不可用" };
+      return { ok: false, checkedAt, message: feedRequestError(cause).message };
     }
   }
 
@@ -188,7 +189,7 @@ export class RssSourceProvider implements SourceProvider {
     for (const item of items) {
       if (!item.url || !/^https:\/\/mikanani\.me\/Home\/Episode\//i.test(item.url)) continue;
       try {
-        const init = { method: "GET", signal: AbortSignal.timeout(20_000), timeoutMs: 20_000 };
+        const init = { method: "GET", signal: timeoutSignal(20_000), timeoutMs: 20_000 };
         const response = await this.textFetcher(item.url, init);
         if (response.status < 200 || response.status >= 300) continue;
         const html = await response.text();
@@ -207,7 +208,7 @@ export class RssSourceProvider implements SourceProvider {
     const init = {
       method: "GET",
       headers: { Accept: "text/html, application/xhtml+xml" },
-      signal: AbortSignal.timeout(20_000),
+      signal: timeoutSignal(20_000),
       timeoutMs: 20_000,
     };
     const response = await this.textFetcher(url.toString(), init);
@@ -221,7 +222,7 @@ export class RssSourceProvider implements SourceProvider {
     if (!/^\d+$/.test(subjectId)) return undefined;
     for (const id of this.mikanSubjects.get(keyword) ?? []) {
       try {
-        const init = { method: "GET", signal: AbortSignal.timeout(20_000), timeoutMs: 20_000 };
+        const init = { method: "GET", signal: timeoutSignal(20_000), timeoutMs: 20_000 };
         const response = await this.textFetcher("https://mikanani.me/Home/Bangumi/" + id, init);
         if (response.status < 200 || response.status >= 300) continue;
         const html = await response.text();

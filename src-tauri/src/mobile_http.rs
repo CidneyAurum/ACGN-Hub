@@ -118,12 +118,8 @@ fn valid_filename(name: &str) -> Result<(), String> {
 
 fn destination(root: &Path, record: &Record) -> Result<PathBuf, String> {
     valid_filename(&record.filename)?;
-    let directory = crate::mobile_files::checked_private_path(
-        root,
-        &record.directory,
-        "安卓下载目录",
-        true,
-    )?;
+    let directory =
+        crate::mobile_files::checked_private_path(root, &record.directory, "安卓下载目录", true)?;
     let root = fs::canonicalize(root).map_err(|error| error.to_string())?;
     let ancestor = safe_fs::canonical_existing_ancestor(&directory)?;
     if !safe_fs::is_path_within(&root, &ancestor) {
@@ -393,8 +389,13 @@ fn load(app: &tauri::AppHandle, id: &str) -> Result<Arc<Task>, String> {
     }
     let root = private_root(app)?;
     let path = record_path(&root, id);
-    let metadata =
-        fs::symlink_metadata(&path).map_err(|_| "没有找到安卓下载记录；请从资源页重新添加")?;
+    let metadata = fs::symlink_metadata(&path).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            "没有找到安卓下载记录；请从资源页重新添加".to_string()
+        } else {
+            format!("读取安卓下载记录失败：{error}")
+        }
+    })?;
     if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > 32 * 1024 {
         return Err("安卓下载记录无效".into());
     }
@@ -454,31 +455,7 @@ fn snapshot(task: &Task) -> Result<Status, String> {
 }
 
 fn launch(task: Arc<Task>) -> Result<Status, String> {
-    {
-        let tasks = registry().lock().map_err(|_| "下载任务状态不可用")?;
-        let active = tasks
-            .values()
-            .filter(|task| task.running.load(Ordering::Acquire))
-            .count();
-        if active >= MAX_ACTIVE {
-            return Err("最多同时下载 3 个文件，请暂停其他任务后继续".into());
-        }
-        task.running
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .map_err(|_| "上一个下载请求仍在停止，请稍后再继续")?;
-    }
-    task.control.store(0, Ordering::Release);
-    let status = {
-        let mut record = task.record.lock().map_err(|_| "下载进度不可用")?;
-        record.status.state = "downloading".into();
-        record.status.stage = "connecting".into();
-        record.status.error = None;
-        if let Err(error) = persist(&task.root, &record) {
-            task.running.store(false, Ordering::Release);
-            return Err(error);
-        }
-        record.status.clone()
-    };
+    let status = prepare_launch(&task)?;
     tauri::async_runtime::spawn(async move {
         let result = transfer(&task).await;
         if let Ok(mut record) = task.record.lock() {
@@ -502,6 +479,37 @@ fn launch(task: Arc<Task>) -> Result<Status, String> {
         task.running.store(false, Ordering::Release);
     });
     Ok(status)
+}
+
+fn prepare_launch(task: &Task) -> Result<Status, String> {
+    // Stop requests use this same record lock. Never expose running=true then
+    // reset control outside the lock: a pause between those steps would be lost.
+    let mut record = task.record.lock().map_err(|_| "下载进度不可用")?;
+    {
+        let tasks = registry().lock().map_err(|_| "下载任务状态不可用")?;
+        let active = tasks
+            .values()
+            .filter(|task| task.running.load(Ordering::Acquire))
+            .count();
+        if active >= MAX_ACTIVE {
+            return Err("最多同时下载 3 个文件，请暂停其他任务后继续".into());
+        }
+        task.running
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map_err(|_| "上一个下载请求仍在停止，请稍后再继续")?;
+    }
+    task.control.store(0, Ordering::Release);
+    let previous = record.status.clone();
+    record.status.state = "downloading".into();
+    record.status.stage = "connecting".into();
+    record.status.error = None;
+    if let Err(error) = persist(&task.root, &record) {
+        record.status = previous;
+        task.running.store(false, Ordering::Release);
+        task.control.store(1, Ordering::Release);
+        return Err(error);
+    }
+    Ok(record.status.clone())
 }
 
 async fn transfer(task: &Task) -> Result<(), String> {
@@ -531,6 +539,12 @@ async fn transfer(task: &Task) -> Result<(), String> {
         .connect_timeout(Duration::from_secs(20))
         .read_timeout(Duration::from_secs(45))
         .redirect(network::redirect_policy())
+        // Range coordinates refer to the transferred representation. Automatic
+        // decompression hides Content-Encoding and changes those byte offsets.
+        .no_gzip()
+        .no_brotli()
+        .no_deflate()
+        .no_zstd()
         .referer(false)
         .user_agent(network::USER_AGENT)
         .build()
@@ -564,7 +578,16 @@ async fn transfer(task: &Task) -> Result<(), String> {
     if !response.status().is_success() {
         return Err(format!("下载来源返回 HTTP {}", response.status()));
     }
-    let total = if response.status() == reqwest::StatusCode::PARTIAL_CONTENT {
+    if response
+        .headers()
+        .get(reqwest::header::CONTENT_ENCODING)
+        .is_some_and(|value| !value.as_bytes().eq_ignore_ascii_case(b"identity"))
+    {
+        return Err("下载来源忽略 identity 编码要求，未将压缩传输拼接为下载文件".into());
+    }
+    let (total, expected_response_bytes) = if response.status()
+        == reqwest::StatusCode::PARTIAL_CONTENT
+    {
         let range = response
             .headers()
             .get(reqwest::header::CONTENT_RANGE)
@@ -574,10 +597,50 @@ async fn transfer(task: &Task) -> Result<(), String> {
         if start != offset || end < start {
             return Err("来源返回了错误的续传位置，未拼接文件".into());
         }
-        total
+        let expected_bytes = end - start + 1;
+        if response
+            .content_length()
+            .is_some_and(|length| length != expected_bytes)
+        {
+            return Err("续传响应长度与 Content-Range 不一致，未拼接文件".into());
+        }
+        if offset > 0 {
+            let changed_validator = if record
+                .etag
+                .as_deref()
+                .is_some_and(|value| !value.starts_with("W/"))
+            {
+                response
+                    .headers()
+                    .get(reqwest::header::ETAG)
+                    .is_some_and(|value| {
+                        Some(value.as_bytes()) != record.etag.as_deref().map(str::as_bytes)
+                    })
+            } else {
+                response
+                    .headers()
+                    .get(reqwest::header::LAST_MODIFIED)
+                    .is_some_and(|value| {
+                        Some(value.as_bytes()) != record.last_modified.as_deref().map(str::as_bytes)
+                    })
+            };
+            if changed_validator {
+                // Preserve the old partial for now, but retry with a fresh full
+                // request instead of repeating an invalid mixed-version resume.
+                let mut current = task.record.lock().map_err(|_| "下载任务不可用")?;
+                current.etag = None;
+                current.last_modified = None;
+                persist(&task.root, &current)?;
+                return Err("下载来源文件版本已变化，未拼接旧内容；重试将重新下载".into());
+            }
+        }
+        (total, Some(expected_bytes))
     } else {
         offset = 0;
-        response.content_length().unwrap_or(0)
+        (
+            response.content_length().unwrap_or(0),
+            response.content_length(),
+        )
     };
     if total > MAX_BYTES {
         return Err("单个文件超过 64 GiB，未开始下载".into());
@@ -635,7 +698,10 @@ async fn transfer(task: &Task) -> Result<(), String> {
         completed = completed
             .checked_add(chunk.len() as u64)
             .ok_or("文件大小超出范围")?;
-        if completed > MAX_BYTES || (total > 0 && completed > total) {
+        if completed > MAX_BYTES
+            || (total > 0 && completed > total)
+            || expected_response_bytes.is_some_and(|expected| completed - offset > expected)
+        {
             return Err("下载文件超过来源声明的大小，未发布文件".into());
         }
         file.write_all(&chunk)
@@ -666,7 +732,10 @@ async fn transfer(task: &Task) -> Result<(), String> {
             checkpoint = Instant::now();
         }
     }
-    if completed == 0 || (total > 0 && completed != total) {
+    if completed == 0
+        || (total > 0 && completed != total)
+        || expected_response_bytes.is_some_and(|expected| completed - offset != expected)
+    {
         return Err("文件未完整传输，保留临时文件以便继续".into());
     }
     file.sync_all()
@@ -820,6 +889,8 @@ async fn stop_task(task: Arc<Task>, cancel: bool) -> Result<Status, String> {
         if record.status.state == "completed" {
             return Ok(record.status.clone());
         }
+        // A simultaneous pause must never downgrade an already requested cancel.
+        let cancel = cancel || task.control.load(Ordering::Acquire) == 2;
         task.control
             .store(if cancel { 2 } else { 1 }, Ordering::Release);
         task.changed.notify_one();
@@ -916,8 +987,16 @@ mod tests {
     fn directory_alias(target: &Path, alias: &Path) {
         let result = std::process::Command::new("cmd.exe")
             .args(["/d", "/c", "mklink", "/J"])
-            .arg(dunce::simplified(alias).to_string_lossy().replace('/', "\\"))
-            .arg(dunce::simplified(target).to_string_lossy().replace('/', "\\"))
+            .arg(
+                dunce::simplified(alias)
+                    .to_string_lossy()
+                    .replace('/', "\\"),
+            )
+            .arg(
+                dunce::simplified(target)
+                    .to_string_lossy()
+                    .replace('/', "\\"),
+            )
             .output()
             .unwrap();
         assert!(
@@ -945,23 +1024,47 @@ mod tests {
         let alias = task.root.with_extension("profile-alias");
         directory_alias(&task.root, &alias);
         let mut record = task.record.lock().unwrap().clone();
-        record.directory = alias.join("Library/Books/NewSeries").to_string_lossy().into_owned();
+        record.directory = alias
+            .join("Library/Books/NewSeries")
+            .to_string_lossy()
+            .into_owned();
         let target = normalize_record_destination(&alias, &mut record).unwrap();
-        assert_eq!(target, task.root.join("Library/Books/NewSeries/archive.zip"));
+        assert_eq!(
+            target,
+            task.root.join("Library/Books/NewSeries/archive.zip")
+        );
         assert_eq!(Path::new(&record.directory), target.parent().unwrap());
-        assert_eq!(record.status.directory.as_deref(), Some(record.directory.as_str()));
+        assert_eq!(
+            record.status.directory.as_deref(),
+            Some(record.directory.as_str())
+        );
         persist(&alias, &record).unwrap();
-        let mut legacy_json: serde_json::Value = serde_json::from_slice(
-            &fs::read(record_path(&task.root, &record.id)).unwrap(),
-        ).unwrap();
-        legacy_json["status"].as_object_mut().unwrap().remove("directory");
+        let mut legacy_json: serde_json::Value =
+            serde_json::from_slice(&fs::read(record_path(&task.root, &record.id)).unwrap())
+                .unwrap();
+        legacy_json["status"]
+            .as_object_mut()
+            .unwrap()
+            .remove("directory");
         let mut restored: Record = serde_json::from_value(legacy_json).unwrap();
         assert!(restored.status.directory.is_none());
-        assert_eq!(normalize_record_destination(&alias, &mut restored).unwrap(), target);
-        assert_eq!(restored.status.directory.as_deref(), Some(restored.directory.as_str()));
+        assert_eq!(
+            normalize_record_destination(&alias, &mut restored).unwrap(),
+            target
+        );
+        assert_eq!(
+            restored.status.directory.as_deref(),
+            Some(restored.directory.as_str())
+        );
         // Existing task JSON from before the fix still contains the raw alias.
-        restored.directory = alias.join("Library/Books/NewSeries").to_string_lossy().into_owned();
-        assert_eq!(normalize_record_destination(&alias, &mut restored).unwrap(), target);
+        restored.directory = alias
+            .join("Library/Books/NewSeries")
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(
+            normalize_record_destination(&alias, &mut restored).unwrap(),
+            target
+        );
         assert_eq!(Path::new(&restored.directory), target.parent().unwrap());
 
         for directory in [
@@ -981,7 +1084,10 @@ mod tests {
         directory_alias(&task.root.join("Library"), &internal_link);
         for directory in [alias.join("ExternalLink"), alias.join("InternalLink/Books")] {
             record.directory = directory.to_string_lossy().into_owned();
-            assert_eq!(destination(&alias, &record).unwrap_err(), "安卓下载目录路径不能包含符号链接");
+            assert_eq!(
+                destination(&alias, &record).unwrap_err(),
+                "安卓下载目录路径不能包含符号链接"
+            );
         }
         remove_directory_alias(&external_link);
         remove_directory_alias(&internal_link);
@@ -1019,6 +1125,161 @@ mod tests {
         (format!("http://{address}/archive.zip"), release, thread)
     }
 
+    fn raw_http_server(response: &'static [u8]) -> (String, std::thread::JoinHandle<()>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let worker = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut request = [0; 8192];
+            let _ = stream.read(&mut request).unwrap();
+            stream.write_all(response).unwrap();
+        });
+        (format!("http://{address}/archive.zip"), worker)
+    }
+
+    #[tokio::test]
+    async fn range_body_cannot_exceed_the_declared_range_even_when_total_size_matches() {
+        let (url, server) = raw_http_server(b"HTTP/1.1 206 Partial Content\r\nContent-Type: application/zip\r\nContent-Range: bytes 4-5/8\r\nContent-Length: 4\r\nETag: \"fixture-v1\"\r\nConnection: close\r\n\r\n5678");
+        let task = fixture(url, 0);
+        task.record.lock().unwrap().etag = Some("\"fixture-v1\"".into());
+        let partial = partial_path(&task.root, &"a".repeat(64));
+        fs::write(&partial, b"1234").unwrap();
+        assert!(
+            transfer(&task).await.is_err(),
+            "an inconsistent range was published as a complete file"
+        );
+        assert_eq!(fs::read(&partial).unwrap(), b"1234");
+        assert!(!task.root.join("Incoming/archive.zip").exists());
+        server.join().unwrap();
+        fs::remove_dir_all(&task.root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn resumed_response_with_changed_validator_does_not_mix_file_versions() {
+        let (url, server) = raw_http_server(b"HTTP/1.1 206 Partial Content\r\nContent-Type: application/zip\r\nContent-Range: bytes 4-7/8\r\nContent-Length: 4\r\nETag: \"fixture-v2\"\r\nConnection: close\r\n\r\nBBBB");
+        let task = fixture(url, 0);
+        task.record.lock().unwrap().etag = Some("\"fixture-v1\"".into());
+        let partial = partial_path(&task.root, &"a".repeat(64));
+        fs::write(&partial, b"AAAA").unwrap();
+        assert!(
+            transfer(&task).await.is_err(),
+            "old and new versions were combined"
+        );
+        assert_eq!(fs::read(&partial).unwrap(), b"AAAA");
+        assert!(
+            task.record.lock().unwrap().etag.is_none(),
+            "retry must request a fresh complete file"
+        );
+        assert!(!task.root.join("Incoming/archive.zip").exists());
+        server.join().unwrap();
+        fs::remove_dir_all(&task.root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn range_body_without_content_length_still_cannot_overrun_content_range() {
+        let (url, server) = raw_http_server(b"HTTP/1.1 206 Partial Content\r\nContent-Type: application/zip\r\nContent-Range: bytes 4-5/8\r\nETag: \"fixture-v1\"\r\nConnection: close\r\n\r\n5678");
+        let task = fixture(url, 0);
+        task.record.lock().unwrap().etag = Some("\"fixture-v1\"".into());
+        let part = partial_path(&task.root, &"a".repeat(64));
+        fs::write(&part, b"1234").unwrap();
+        assert!(transfer(&task).await.is_err());
+        assert_eq!(fs::read(&part).unwrap(), b"1234");
+        assert!(!task.root.join("Incoming/archive.zip").exists());
+        server.join().unwrap();
+        fs::remove_dir_all(&task.root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn valid_range_resumes_and_a_full_response_restarts_without_old_bytes() {
+        for (response, expected) in [
+            (b"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 4-7/8\r\nContent-Length: 4\r\nETag: \"fixture-v1\"\r\nConnection: close\r\n\r\n5678".as_slice(), b"12345678".as_slice()),
+            (b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\nETag: \"fixture-v2\"\r\nConnection: close\r\n\r\nABCDEFGH".as_slice(), b"ABCDEFGH".as_slice()),
+        ] {
+            let (url, server) = raw_http_server(response);
+            let task = fixture(url, 0);
+            task.record.lock().unwrap().etag = Some("\"fixture-v1\"".into());
+            fs::write(partial_path(&task.root, &"a".repeat(64)), b"1234").unwrap();
+            transfer(&task).await.unwrap();
+            assert_eq!(snapshot(&task).unwrap().state, "completed");
+            assert_eq!(fs::read(task.root.join("Incoming/archive.zip")).unwrap(), expected);
+            server.join().unwrap();
+            fs::remove_dir_all(&task.root).unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn encoded_response_does_not_destroy_existing_partial_or_publish_compressed_bytes() {
+        let (url, server) = raw_http_server(b"HTTP/1.1 200 OK\r\nContent-Encoding: gzip\r\nContent-Length: 8\r\nConnection: close\r\n\r\nABCDEFGH");
+        let task = fixture(url, 0);
+        let part = partial_path(&task.root, &"a".repeat(64));
+        fs::write(&part, b"keep partial").unwrap();
+        let error = transfer(&task).await.unwrap_err();
+        assert!(error.contains("identity"));
+        assert_eq!(fs::read(&part).unwrap(), b"keep partial");
+        assert!(!task.root.join("Incoming/archive.zip").exists());
+        server.join().unwrap();
+        fs::remove_dir_all(&task.root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_late_pause_cannot_revoke_an_already_requested_cancel() {
+        let task = fixture("https://example.org/archive.zip".into(), 0);
+        task.running.store(false, Ordering::Release);
+        let partial = partial_path(&task.root, &"a".repeat(64));
+        fs::write(&partial, b"temporary bytes").unwrap();
+        assert_eq!(
+            stop_task(task.clone(), true).await.unwrap().state,
+            "cancelled"
+        );
+        assert_eq!(
+            stop_task(task.clone(), false).await.unwrap().state,
+            "cancelled"
+        );
+        assert_eq!(task.control.load(Ordering::Acquire), 2);
+        assert!(!partial.exists());
+        fs::remove_dir_all(&task.root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn launch_state_and_pause_are_serialized_before_a_worker_becomes_visible() {
+        let task = fixture("https://example.org/archive.zip".into(), 0);
+        task.running.store(false, Ordering::Release);
+        task.control.store(1, Ordering::Release);
+        let held_record = task.record.lock().unwrap();
+        let launching = task.clone();
+        let (attempting, attempted) = std::sync::mpsc::channel();
+        let launch_thread = std::thread::spawn(move || {
+            attempting.send(()).unwrap();
+            prepare_launch(&launching)
+        });
+        attempted.recv_timeout(Duration::from_secs(1)).unwrap();
+        // While another operation owns the record, no half-initialized worker
+        // may be exposed to pause/cancel (the old ordering set running first).
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(!task.running.load(Ordering::Acquire));
+        assert_eq!(task.control.load(Ordering::Acquire), 1);
+        drop(held_record);
+        assert_eq!(launch_thread.join().unwrap().unwrap().state, "downloading");
+        let worker = task.clone();
+        let stopped = tokio::spawn(async move {
+            assert!(until_stopped(&worker, std::future::pending::<()>())
+                .await
+                .is_none());
+            worker.running.store(false, Ordering::Release);
+        });
+        assert_eq!(
+            stop_task(task.clone(), false).await.unwrap().state,
+            "paused"
+        );
+        stopped.await.unwrap();
+        assert_eq!(task.control.load(Ordering::Acquire), 1);
+        assert!(!task.running.load(Ordering::Acquire));
+        fs::remove_dir_all(&task.root).unwrap();
+    }
+
     fn spawn_transfer(task: Arc<Task>) -> tokio::task::JoinHandle<Result<(), String>> {
         tokio::spawn(async move {
             let result = transfer(&task).await;
@@ -1050,7 +1311,10 @@ mod tests {
         let status = snapshot(&task).unwrap();
         assert_eq!(status.state, "completed");
         assert_eq!(status.files, vec![target.to_string_lossy().into_owned()]);
-        assert_eq!(status.directory.as_deref(), target.parent().unwrap().to_str());
+        assert_eq!(
+            status.directory.as_deref(),
+            target.parent().unwrap().to_str()
+        );
         server.join().unwrap();
         remove_directory_alias(&alias);
         fs::remove_dir_all(&fixture_task.root).unwrap();

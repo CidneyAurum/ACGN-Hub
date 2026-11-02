@@ -1,3 +1,4 @@
+import { timeoutSignal, anySignal, throwIfAborted, disposeAbortSignal } from "@/shared/abort-signals";
 import { z } from "zod";
 import type { SourceHealth, SourceProvider, SourceSearchQuery, SourceSearchResult } from "@/application/source-ports";
 import type { DownloadTarget } from "@/domain/download";
@@ -78,7 +79,7 @@ export class VndbReleaseSourceProvider implements SourceProvider {
       if (!parsed.success) throw new Error("VNDB 作品目录格式发生变化，请在原站确认");
       return parsed.data.results;
     }));
-    signal?.throwIfAborted();
+    throwIfAborted(signal);
     const successful = responses.filter((result) => result.status === "fulfilled");
     if (!successful.length) {
       const failure = responses.find((result) => result.status === "rejected");
@@ -193,10 +194,10 @@ export class VndbReleaseSourceProvider implements SourceProvider {
   }
 
   private async request(endpoint: "vn" | "release", body: unknown, signal?: AbortSignal): Promise<unknown> {
-    signal?.throwIfAborted();
+    throwIfAborted(signal);
     await abortableRequest(() => this.limiter.wait(), signal);
-    const timedSignal = AbortSignal.timeout(this.timeoutMs);
-    const combinedSignal = signal ? AbortSignal.any([signal, timedSignal]) : timedSignal;
+    const timedSignal = timeoutSignal(this.timeoutMs);
+    const combinedSignal = signal ? anySignal([signal, timedSignal]) : timedSignal;
     try {
       const response = await abortableRequest(() => this.fetcher(`${API}/${endpoint}`, {
         method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" },
@@ -206,12 +207,13 @@ export class VndbReleaseSourceProvider implements SourceProvider {
       if (response.status < 200 || response.status >= 300) throw new Error(`VNDB 发行目录 HTTP ${response.status}，请稍后重试或打开原站`);
       return await abortableRequest(() => response.json(), combinedSignal);
     } catch (cause) {
-      signal?.throwIfAborted();
+      throwIfAborted(signal);
       if (timedSignal.aborted || isTimeoutError(cause)) throw new Error("VNDB 发行目录请求超时，请稍后重试");
       if (cause instanceof Error && cause.message.startsWith("VNDB ")) throw cause;
       if (cause instanceof SyntaxError) throw new Error("VNDB 发行目录返回了无效 JSON，请稍后重试");
       throw new Error("无法连接 VNDB 发行目录，请检查网络后重试");
     }
+    finally { disposeAbortSignal(combinedSignal); disposeAbortSignal(timedSignal); }
   }
 }
 
