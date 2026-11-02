@@ -47,7 +47,7 @@
 
 Windows 普通直链和 BT 下载使用内置引擎。JMComic、公开投稿等可选功能需要相应本机工具，详情见[使用指南](docs/releases/v0.5.0-usage.md)。发行包不含账号、用户资料或作品文件。
 
-## 0.5.0：同一套书架，适配电脑与手机
+## 同一套书架，适配电脑与手机
 
 Android APK 包含 **arm64-v8a 与 x86_64**，最低为 **Android 8.0 / API 26**。安装后通过底部导航进入书架、资源和下载；更多工具从菜单打开。漫画支持触屏翻页及横竖屏阅读，完成的文件可调用系统「导出 / 分享」选择器。
 
@@ -62,7 +62,7 @@ Android APK 包含 **arm64-v8a 与 x86_64**，最低为 **Android 8.0 / API 26**
 | Windows 游戏扫描、启动及存档工具 | 支持相应本地工具流程 | 不支持 |
 | 便携目录迁移 | 完整 `Data` 随目录搬迁 | 应用私有目录，不使用 Windows 便携模式 |
 
-Android 下载要求应用保持运行。原生 HTTP 任务保存断点，重启后恢复为暂停；续传取决于服务器支持。当前没有系统后台下载服务，不承诺锁屏或后台持续传输。CBZ / TXT 可在应用内阅读；本地视频播放取决于 Android WebView 及系统编码。两个平台的资料库独立保存，暂不自动同步。具体已验证样本与设备范围见[构建和验证记录](docs/research/android-v050.md)。
+Android 下载要求应用保持运行。原生 HTTP 任务保存断点，重启后恢复为暂停；续传取决于服务器支持。当前没有系统后台下载服务，不承诺锁屏或后台持续传输。CBZ、TXT 和未加密 EPUB 可在应用内阅读；本地视频播放取决于 Android WebView 及系统编码。两个平台的资料库独立保存，暂不自动同步。当前样本与范围见[0.5.3 指南](docs/releases/v0.5.3-usage.md#验证结果与范围)，基础构建见[Android 记录](docs/research/android-v050.md)。
 
 ## 0.4.0：补齐轻小说与 Galgame，改善便携使用
 
@@ -149,10 +149,13 @@ powershell -NoProfile -File .\src-tauri\scripts\build-android.ps1 -Action build
 
 ## 验证与文档
 
-0.5.2通过 **743单测、102完整浏览器、118 Rust**（2默认忽略）及类型检查。最终Windows实测TXT / CBZ内读与已有进度；API35 Android升级保留收藏和来源，真实LNovel候选改词失效、20卷详情、新卷1下载 / 内读 / 选择器取消通过。原9表、3媒体、26旧EXE保持，9附件大小 / SHA256 / GitHub摘要及便携包 / APK身份回验一致。身份与未覆盖范围见[验证记录](VERIFICATION.md)；完整Galgame安装运行未验收，EPUB / PDF使用外部阅读器。
+0.5.3 通过 **796 单测、107 项完整浏览器回归、138 Rust 测试**（4 项默认忽略），另有 2 项真实 EPUB 原生测试、最终修复后的 9 项来源浏览器流程及类型检查通过。Windows 实测 EPUB 与官方游戏文件下载，最终 EXE 复验 EPUB / TXT / CBZ 阅读与进度；Android API 35 x86_64 模拟器覆盖升级保留、图文阅读与下载，最终 APK 另行下载并阅读第三卷。原 9 张表、3 个媒体文件和旧版 EXE 保持。候选及最终构建范围见[验证记录](VERIFICATION.md)。实体手机、ARM64 运行及游戏安装运行未验收；PDF 使用外部阅读器。
 
 | 文档 | 内容 |
 | --- | --- |
+| [0.5.3 使用指南](docs/releases/v0.5.3-usage.md) | 插图 EPUB、分卷内读、官方免费游戏与双端验收范围 |
+| [0.5.3 轻小说来源](docs/research/novel-sources-v053.md) | 实际目录、分卷质量、作者检索与下架边界 |
+| [0.5.3 官方免费 Galgame](docs/research/galgame-sources-v053.md) | 三部作者官方作品、完整文件与时效链接处理 |
 | [0.5.2 使用指南](docs/releases/v0.5.2-usage.md) | 资源选择、初始化、任务恢复及请求生命周期修复 |
 | [0.5.2 修复记录](docs/research/bugfixes-v052.md) | 确定复现、回归及本版构建和原生范围 |
 | [0.5.1 使用指南](docs/releases/v0.5.1-usage.md) | 兼容补丁、升级与 Android 来源失败排查 |

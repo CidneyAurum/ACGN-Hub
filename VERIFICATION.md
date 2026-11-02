@@ -1,5 +1,28 @@
 # ACGN Hub 验证记录
 
+## 最新增量：0.5.3 插图 EPUB 与官方免费游戏
+
+本轮补充可按卷下载的 Wenku8 EPUB、应用内图文阅读及三部作者官方免费视觉小说，修复来源类型保存、LNovel 结果截断、虚假搜索别名和重复下载关联覆盖。[0.5.3 下载与使用](docs/releases/v0.5.3-usage.md)，[轻小说来源核查](docs/research/novel-sources-v053.md)，[Galgame 来源核查](docs/research/galgame-sources-v053.md)。
+
+| 检查 | 结果与范围 |
+| --- | --- |
+| 前端与类型 | `.work/v053-evidence/unit.log`：**74 文件 / 796 通过**；类型检查通过 |
+| Rust | `rust.log`：**138 通过、4 默认忽略**；`rust-real-epub.log` 另显式运行 **2 项真实 EPUB 测试通过** |
+| 浏览器 | `browser-final.log` 完整 **107 项通过**；最后的 EPUB 重复关联修复后，`source-guard-final.log` **9 项来源流程通过**，包括 Wenku8 第三项重复保护。两轮有重叠，不相加为完整数量 |
+| EPUB 来源 | 生产适配器核查书名、作者、分卷和质量；完整下载两卷样本并检查 ZIP、目录和插图。下架《无职转生》正篇只展示原因，不生成下载或用蛇足篇替换；目录可读不等同于全部附件可用 |
+| 官方免费游戏 | 三位作者九个平台文件可读取并冷恢复地址；两份官方 Windows 完整包 CRC 通过。匿名免费入口、稳定资源身份、开始及重试时刷新时效地址，不提供付费附件或试玩本体替代 |
+| Windows 最终成品 | `windows-native.json`：EXE **26,276,352 字节**，SHA256 `A30ED3FC5FA0B6795C4730B90241226929F0C0BCE6CC8A73E4DE7D61518652C5`；setup **7,430,598 字节**，`445D6E0BF4C876BE87974150F4113D69F343325A7531476A217D251B0AB152D1`。两项最终扫描退出 0、无新增检测；setup 未实际安装 |
+| Windows 实际流程 | 本轮早期构建正常界面下载《文学少女》首卷 EPUB（2,856,332 字节）和 missed messages. ZIP（29,447,313 字节），均完整 CRC 通过。最终 EXE 用 UIAutomation 重新确认版本、6 个完成记录、EPUB 封面 / 13 章目录 / 正文 / 进度、旧 TXT 及 39 页 CBZ 第 2 页。最终未重下上述文件，游戏未执行 |
+| Android 最终身份 | `apk-verification.json` 与 `android-native.json`：**55,718,470 字节**，SHA256 `67B468B030C217A3742ABFE663DDFDF4281CE67B89CF538502711C908E6D99EF`；`local.acgnhub.mobile`、0.5.3 / 5003、min26 / target36、arm64-v8a + x86_64；v2 / v3 签名、CRC、16 KiB ELF / ZIP 对齐通过，沿用证书，无资料或私钥 |
+| Android 候选完整流程 | `candidate-native.json` 对应候选 APK `4847AF8EEA1C35075D73CF9B20DBB5D664AA02F909F087DBE8C8C0C4670E659A`：0.5.2 升级保留、EPUB 第 1 / 2 卷批量下载、插图 / 目录 / 全屏自动接续、重启进度，以及官方 Windows 游戏 ZIP 下载和分享选择器取消。该候选不作为最终发布 APK |
+| Android 最终复验 | 最终 APK 单独覆盖安装，保留 4 收藏 / 5 既有成品，TXT 第二章、CBZ 第 2 / 39 页、EPUB 第 2 卷位置正常。通过正常界面重新检索并下载 EPUB 第 3 卷约 3.2 MB，插图、目录、正文和全屏可用，最终 6 个完成任务，TXT 与 EPUB 分组独立。既有游戏完成记录保留，最终未重新下载游戏 |
+| Android 范围 | 原生交互使用 ADB / UIAutomator，API 35 / Android 15 **x86_64 模拟器**，无 CDP / 注入，crash buffer 空。未验证实体手机、ARM64 运行、所有 WebView 或持续后台下载；分享选择器只打开并取消，无发送 |
+| 资料与入口 | `data-preservation.json`：原用户 9 张表、3 个媒体及旧 EXE 与本轮基线保持，数据库完整性 ok。桌面入口指向 `START-ACGN-0.5.3.cmd`，保留原 `release/v0.3.2/Data`；原资料库未用于本轮运行验收。应用与独立模拟器均已关闭 |
+
+发布附件提供四产物综合清单及 SHA-256；Windows 便携包只含程序、启动标记、说明及第三方声明，Android 私钥与本地源文件不进入附件。发布回读在打包上传后另存本机 `.work/v053-evidence/`，不将上游实物或审计私有内容上传仓库。
+
+APK 内容 SHA-256 与签名证书指纹分别记录；证书仍为 `40C95E2A527E537C9DA136667095B982F9402A969953D8F8C0D1A64BE34744A8`。原生边界保持在实际样本范围内，不把来源目录数量、归档完整性或模拟器运行泛化为全部作品、游戏运行及实体手机通过。
+
 ## 最新增量：0.5.2 流程与生命周期（正式发布与附件回验完成）
 
 本版源码回归、最终双端原生样本、资料保留、打包和GitHub9附件实际回读完成，[0.5.2 已正式发布](https://github.com/CidneyAurum/ACGN-Hub/releases/tag/v0.5.2)。本轮修复本地并发与请求生命周期，不做网络重构或处理节点限制。

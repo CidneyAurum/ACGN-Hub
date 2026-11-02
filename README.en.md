@@ -11,7 +11,7 @@ A library for anime, manga, light novels and visual novels on Windows and Androi
 - Seasonal anime discovery follows the local calendar, with past seasons and a broadcast schedule. Manga, novels and visual novels have their own cover shelves.
 - Search for a title or author and see related works. Metadata comes from Bangumi and VNDB; source searches can also run independently.
 - Compare language, platform, edition and acquisition method. Full games, patches, trials, soundtracks, web links and direct files are labelled separately.
-- Windows uses embedded aria2 for HTTP / HTTPS, magnets and torrents; qBittorrent is optional. Android has its own foreground HTTP engine and supports the CBZ / TXT download workflows. Available actions reflect each platform's capabilities.
+- Windows uses embedded aria2 for HTTP / HTTPS, magnets and torrents; qBittorrent is optional. Android has its own foreground HTTP engine and supports the CBZ / TXT / EPUB download workflows. Available actions reflect each platform's capabilities.
 - Read downloaded CBZ comics in continuous, single-page or fullscreen mode. TXT and unencrypted EPUB offer chapters, typography, paper themes and saved progress; EPUB preserves text and illustration order. Continue to the next downloaded unit of the same work.
 - On Windows, keep settings, records, readers and default files in a portable `Data` folder. Registered internal paths follow a moved profile. Android uses private application storage; the platforms keep separate profiles.
 
@@ -41,7 +41,7 @@ Microsoft Edge WebView2 Runtime is required. Normal use does not require Node.js
 
 Confirm output folders in **Settings**, enable the sources you need in **Sources**, then open a work or search a source directly. Download-source presets are disabled by default. Optional JMComic and public-video workflows require their respective local tools. Packages contain no user profile or media.
 
-## 0.5.0: Windows and Android
+## Windows and Android
 
 One Android APK includes **arm64-v8a and x86_64**, with a minimum of **Android 8.0 / API 26**. Bottom navigation opens the library, sources and downloads, with additional tools in the menu. Comics support touch paging and portrait / landscape reading. Completed files can open Android's system export / share chooser.
 
@@ -119,7 +119,7 @@ The default build includes arm64 and x86_64. Packaging copies verified native li
 
 ## Verification and credits
 
-Version 0.5.2 passes **743 frontend tests, all 102 browser tests and 118 Rust tests** (2 ignored), plus type checks. Final Windows samples read existing TXT / CBZ files and saved positions. The API35 Android emulator preserves collections / sources after upgrading, invalidates changed LNovel queries, opens a 20-volume list and downloads / reads a fresh first volume with chooser cancellation. Original 9 database tables, 3 media files and 26 older executables remain intact. All nine downloaded assets match their sizes, SHA256 hashes and GitHub digests, with portable ZIP and APK identities verified. See the [verification record](VERIFICATION.md) for scope. Complete game installation / launch is not verified. EPUB and PDF require external readers.
+Version 0.5.3 passes **796 frontend tests, 107 full-suite browser tests and 138 Rust tests** (4 ignored), plus 2 explicit real-EPUB tests, 9 targeted source browser tests after the final fix, and type checks. Windows samples downloaded an EPUB and an official freeware archive; the final EXE rechecked EPUB / TXT / CBZ reading and saved progress. An API 35 x86_64 Android emulator covered upgrade preservation, illustrated reading and downloads; the final APK separately downloaded and read a third volume. Original 9 database tables, 3 media files and older executables remain intact. See the [verification record](VERIFICATION.md) for candidate and final-build scope. Physical phones, ARM64 execution and game installation / launch are not verified. PDF uses an external reader.
 
 See the [verification record](VERIFICATION.md), [0.5.0 guide](docs/releases/v0.5.0-usage.md), [released 0.4.0 guide](docs/releases/v0.4.0-usage.md), [archived README](HISTORY.md) and [third-party notices](THIRD_PARTY_NOTICES.md). The archive preserves historical wording and original path references.
 
